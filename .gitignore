@@ -1,0 +1,6 @@
+# compiled Python: these files hold the absolute path of the folder they were compiled in
+__pycache__/
+*.py[cod]
+
+# release builds (tools/release.py)
+dist/

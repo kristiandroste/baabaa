@@ -1,0 +1,22 @@
+{
+  "name": "baabaa",
+  "short_name": "baabaa",
+  "description": "A local assistant and coding agent on your own GPU.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf9f6",
+  "theme_color": "#2f7d6d",
+  "icons": [
+    {"src": "/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "/img/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ],
+  "shortcuts": [
+    {"name": "New chat", "url": "/#/"},
+    {"name": "Projects", "url": "/#/projects"},
+    {"name": "Code", "url": "/#/code"}
+  ]
+}
