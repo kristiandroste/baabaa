@@ -51,9 +51,10 @@ class CpuWatch:
     async def stop(self) -> None:
         task, self._task = self._task, None
         if task is not None and not task.done():
-            task.cancel()
-            try:
-                await task
+            if self.tripped is None:
+                task.cancel()
+            try:  # after a trip, the stop it began is left to finish: cut short, it could leave the program running
+                await asyncio.wait_for(task, 30)
             except (asyncio.CancelledError, Exception):  # noqa: BLE001 - the watch must never break a request
                 pass
 

@@ -158,7 +158,7 @@ else
   set -- $PICK
   [ "$#" -eq 4 ] || fail "nothing was installed."
   VERSION="$1"; URL="$2"; SHA="$3"; SIZE="$4"
-  say "Downloading baabaa $VERSION…"
+  say "Downloading baabaa ${VERSION}..."
   fetch "$URL" "$TMP/baabaa.tar.gz" || fail "the download failed, so nothing was installed."
 fi
 helper unpack "$TMP/baabaa.tar.gz" "$VERSION" "$SHA" "$SIZE" "$TMP" || fail "nothing was installed."

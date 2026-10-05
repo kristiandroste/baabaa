@@ -245,6 +245,14 @@ class TestMacCommands(unittest.TestCase):
             self.assertFalse(shellcheck._sensitive("/home/u/.SSH-notes/x"))
 
 
+class TestShellScripts(unittest.TestCase):
+    def test_plain_ascii(self):
+        # macOS's sh takes a byte above 127 that follows $NAME as part of the name, and `set -u` then stops the
+        # script: an ellipsis after $VERSION did that to the installer
+        for name in ("install.sh", "bin/baabaa"):
+            self.assertTrue((ROOT / name).read_bytes().isascii(), f"{name} has characters outside ASCII")
+
+
 class TestAsMac(unittest.TestCase):
     def test_every_module_imports_as_macos(self):
         """baabaa's macOS branches, run here: sys.platform says darwin before baabaa is imported (the standard

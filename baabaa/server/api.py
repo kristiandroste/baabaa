@@ -839,7 +839,7 @@ class Web:
         if code != 0:
             raise RuntimeError(f"git worktree add failed: {clip(out, 400)}")
         sub = os.path.relpath(conv["folder"], top)
-        folder = os.path.realpath(os.path.join(path, sub)) if sub != "." else str(path)
+        folder = os.path.realpath(os.path.join(path, sub))
         if self.app.maindb.is_trusted(conv["folder"]):
             self.app.maindb.trust(folder, req.account["id"])  # the same code as the trusted folder
         store = self._store(req)

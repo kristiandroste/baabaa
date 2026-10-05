@@ -226,6 +226,8 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
             with open(files[k], "wb") as f:
                 f.write(b"\0" * 1024)
         server = os.path.join(ROOT, "tests", "fixtures", "fake_sd_server.py")
+        if sys.platform != "linux":
+            self.skipTest("models outside Ollama run on Linux only")
         m = self.app.registry.add_sdcpp(name, {"server": server, **files, "edit": edit, "steps": 8})
         self.app.registry.set_fit(m["name"], {"fits": True, "num_ctx": 0, **({"seconds_1024": seconds} if seconds else {})})
         self.app.registry.approve(m["name"], True)
@@ -317,6 +319,14 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
         class Req:
             body, query, account, window = wav, {"lang": "en"}, self.account, "browser"
         web = Web(self.app, guard=None, tls=False, port=0)
+        import json
+        if sys.platform != "linux":  # on a Mac, Ollama runs the audio encoder on the GPU itself
+            self.ollama.script([{"content": "Count the lambs in the top field."}])
+            resp = await web.transcribe(Req())
+            self.assertEqual(json.loads(resp.body)["text"], "Count the lambs in the top field.")
+            self.assertTrue([r for r in self.ollama.requests if r["path"] == "/api/chat" and r.get("messages")
+                             and r["messages"][0].get("images")])  # the audio went to Ollama
+            return
         # Ollama would run the audio encoder on the CPU, so baabaa runs the model's files itself with
         # Ollama's server program (here: a stand-in install around the fake llama-server)
         from baabaa import llamacpp
@@ -333,7 +343,6 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
             resp = await web.transcribe(Req())
         finally:
             llamacpp.OLLAMA_DIRS = dirs
-        import json
         self.assertEqual(json.loads(resp.body)["text"], "Count the lambs in the top field.")
         self.assertFalse([r for r in self.ollama.requests if r["path"] == "/api/chat" and r.get("messages")
                           and r["messages"][0].get("images")])  # the audio never went to Ollama
