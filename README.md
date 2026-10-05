@@ -62,7 +62,9 @@ No dependencies: the Python standard library and hand-written HTML, CSS and Java
 - Or a Mac with Apple silicon, with Python 3.10 or newer from [python.org](https://www.python.org/downloads/macos/)
   or Homebrew (`brew install python`; the `python3` that comes with macOS is too old). Models run on the GPU
   through Metal, which shares the computer's memory: about two thirds of it can hold models (three quarters
-  above 36 GB). New and not yet tried on a Mac: run `baabaa doctor --sandbox` first. Not on the Mac yet:
+  above 36 GB). Tested on macOS 15 (2026-10-05): the installer, the tests and the sandbox's checks pass. Models
+  on a Mac's GPU are not tested yet, and on another macOS version run `baabaa doctor --sandbox` first. Not on
+  the Mac yet:
   models that run outside Ollama, GPU search of project documents (keyword search instead), and per-second GPU
   statistics. On an Intel Mac, Ollama computes on the CPU, so baabaa installs but runs no models.
 - [Ollama](https://ollama.com/download) running on the same machine (default `http://127.0.0.1:11434`).

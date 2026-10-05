@@ -3,6 +3,13 @@
 The notes for each release. `baabaa update` and the browser's update notice show them before an update,
 and every account sees the newest section once afterwards.
 
+## 0.9.2 - 2026-10-05
+
+- Macs: the installer stopped at its download step on macOS; fixed. On macOS 15 with Apple silicon the installer,
+  updates and restarts, the tests and the tool sandbox's checks now pass. Models on a Mac's GPU are not tested yet.
+- The CPU guard finishes stopping a model program before the reply reports it.
+- baabaa is licensed under the GNU AGPL, version 3. Contributions need the contributor agreement (CLA.md).
+
 ## 0.9.1 - 2026-10-02
 
 - Choose who can connect: this computer only (plain HTTP on localhost, no certificate needed) or other devices
