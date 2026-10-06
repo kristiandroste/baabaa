@@ -5,6 +5,8 @@ through [Ollama](https://ollama.com) on your own GPU: Linux with an NVIDIA GPU, 
 (new: see Requirements). One Python program serves the same conversations to a browser (on this computer, or
 on any device on your network if you allow it) and to a terminal.
 
+Website: [baabaa.kdro.ai](https://baabaa.kdro.ai/), with the tutorial, every document and a preview of the interface.
+
 - **Chat and code in one place.** A conversation is a chat; give it a working folder and it can read,
   edit and run things there. Browser and terminal are two views of the same history.
 - **Four modes** for actions: Manual (ask before every edit and command), Accept edits, Plan (read only,

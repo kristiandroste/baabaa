@@ -72,7 +72,8 @@ none yet. An install's channel is in `~/.local/lib/baabaa/update.json` and in **
 ## The website
 
 `python3 tools/website.py build` makes the site in `dist/site`: the landing page, the documents (the Markdown
-files of this repository, shown by a small reader) and the preview. `python3 tools/website.py serve` builds it
+files of this repository, shown by a small reader) and the preview, with the sharing tags, `robots.txt` and
+`sitemap.xml` for its address (`DOMAIN` in the tool) and the sharing image `website/og.png`. `python3 tools/website.py serve` builds it
 and serves it at `http://127.0.0.1:8900/` on this computer only, to look at.
 
 The preview is the interface in `baabaa/web/`, unchanged, with `website/preview.js` standing in for the

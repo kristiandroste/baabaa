@@ -41,7 +41,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 GUEST = "/home/guest"            # where the preview says things are
 MODEL = "scripted:4b"            # what the preview calls its stand-in model
-RATE = 38                        # tokens a second the preview plays recorded text at (website/preview.js)
+RATE = 38
+DOMAIN = "baabaa.kdro.ai"   # where the site lives: the sharing tags need absolute addresses                        # tokens a second the preview plays recorded text at (website/preview.js)
 DOCUMENTS = ["README.md", "CHANGELOG.md", "SECURITY.md", "CONTRIBUTING.md", "CLA.md", "LICENSE"]
 # what the app reads when it starts or opens a page, taken from the real server as it answers
 SNAPSHOT = ["/api/me", "/api/profiles", "/api/health", "/api/status", "/api/models", "/api/jobs", "/api/shares", "/api/projects",
@@ -379,7 +380,9 @@ def preview_page() -> str:
     page = re.sub(r'(href|src)="/', r'\1="', page)
     page = re.sub(r'<link rel="manifest"[^>]*>\n', "", page)
     page = page.replace("<title>baabaa</title>", "<title>baabaa preview</title>\n"
-                        f'<meta http-equiv="Content-Security-Policy" content="{APP_CSP}">\n<meta name="referrer" content="no-referrer">')
+                        f'<meta http-equiv="Content-Security-Policy" content="{APP_CSP}">\n<meta name="referrer" content="no-referrer">\n'
+                        + share_tags("/preview/", "baabaa preview", "The baabaa interface with recorded replies: a chat, a coding session with "
+                                     "approvals, artifacts, settings. Nothing here runs a model.", up="../"))
     page = page.replace('<link rel="stylesheet" href="css/app.css">',
                         '<link rel="stylesheet" href="css/app.css">\n<link rel="stylesheet" href="preview.css">')
     page = page.replace('<script type="module" src="js/app.js"></script>',
@@ -395,6 +398,21 @@ def framed(doc: str) -> str:
     """An artifact's page as a file of its own: the policy the real server sends as a header goes inside it."""
     meta = f'<meta http-equiv="Content-Security-Policy" content="{ARTIFACT_CSP}">'
     return re.sub(r"(<head[^>]*>)", lambda m: m.group(1) + meta, doc, count=1) if re.search(r"<head[^>]*>", doc) else meta + doc
+
+
+def share_tags(path: str, title: str, description: str, up: str = "") -> str:
+    """What a shared link shows (Open Graph and Twitter cards), the canonical address and the icons."""
+    site = f"https://{DOMAIN}"
+    return "\n".join([
+        f'<link rel="canonical" href="{site}{path}">',
+        '<meta property="og:type" content="website">', '<meta property="og:site_name" content="baabaa">',
+        f'<meta property="og:title" content="{title}">', f'<meta property="og:description" content="{description}">',
+        f'<meta property="og:url" content="{site}{path}">', f'<meta property="og:image" content="{site}/og.png">',
+        '<meta property="og:image:width" content="1200">', '<meta property="og:image:height" content="630">',
+        '<meta property="og:image:alt" content="baabaa: your own assistant and coding agent, on your own GPU.">',
+        '<meta name="twitter:card" content="summary_large_image">', f'<meta name="twitter:title" content="{title}">',
+        f'<meta name="twitter:description" content="{description}">', f'<meta name="twitter:image" content="{site}/og.png">',
+        f'<link rel="apple-touch-icon" href="{up}preview/img/apple-touch-icon.png">', '<meta name="theme-color" content="#2f7d6d">'])
 
 
 def build(out: Path, domain: str | None = None, quiet: bool = False) -> dict:
@@ -427,9 +445,19 @@ def build(out: Path, domain: str | None = None, quiet: bool = False) -> dict:
         (out / "preview" / "artifact-frame" / f"{key}.html").write_text(framed(doc))
     for name in ("index.html", "site.css", "site.js"):
         page = (SITE / name).read_text()
+        page = page.replace("{{share}}", share_tags("/", "baabaa: your own assistant and coding agent, on your own GPU",
+                                                    "A self-hosted assistant and coding agent on local models, for your computer or your network. "
+                                                    "Chat and code in one place, with memory, projects, artifacts and a sandbox. No dependencies."))
         (out / name).write_text(page.replace("{{version}}", __version__).replace("{{csp}}", APP_CSP))
+    shutil.copy(SITE / "og.png", out / "og.png")
+    (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: https://{DOMAIN}/sitemap.xml\n")
+    (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                                     + "".join(f"  <url><loc>https://{DOMAIN}{p}</loc></url>\n" for p in ("/", "/docs/", "/preview/")) + "</urlset>\n")
     (out / "docs").mkdir()
-    (out / "docs" / "index.html").write_text((SITE / "docs.html").read_text().replace("{{csp}}", APP_CSP))
+    docs = (SITE / "docs.html").read_text().replace("{{csp}}", APP_CSP)
+    docs = docs.replace("{{share}}", share_tags("/docs/", "baabaa documents", "The tutorial, the reference, the developer guide and every "
+                                                "other document of baabaa, a self-hosted assistant and coding agent on local models.", up="../"))
+    (out / "docs" / "index.html").write_text(docs)
     (out / "docs" / "src" / "docs").mkdir(parents=True)
     names = DOCUMENTS + sorted(f"docs/{p.name}" for p in (ROOT / "docs").glob("*.md"))
     for name in names:
