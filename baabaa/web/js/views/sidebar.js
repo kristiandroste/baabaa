@@ -86,12 +86,15 @@ function renderList() {
   }
 }
 
+// three curls of the thread (thread.js), drawn and undrawn while a conversation is working
+const CURL = '<svg viewBox="0 0 26 12" aria-hidden="true"><path pathLength="100" d="M1 10C4 10 8 2 5.6 2C3.4 2 5 10 9.5 10C12.5 10 16.5 2 14.1 2C11.9 2 13.5 10 18 10C21 10 25 2 22.6 2C20.4 2 22 10 25 10"/></svg>';
+
 function item(c, current) {
   const more = h('button', { class: 'icon-btn sb-more', type: 'button', title: 'More', onclick: e => { e.preventDefault(); e.stopPropagation(); convMenu(more, c); } }, icon('more', 16));
   return h('a', { class: 'sb-item' + (c.id === current ? ' active' : ''), href: `#/c/${c.id}`, role: 'listitem', title: c.title || 'Untitled' },
     c.folder ? icon('folder', 14, 'sb-item-icon') : c.project_id ? icon('box', 14, 'sb-item-icon') : null,
     h('span', { class: 'sb-title' }, c.title || 'Untitled'),
-    c.running ? h('span', { class: 'sb-running', title: 'Working' }) : null,
+    c.running ? h('span', { class: 'sb-running', title: 'Working', html: CURL }) : null,
     more);
 }
 

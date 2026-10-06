@@ -16,10 +16,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import __version__
 from .util import clip, dumps, loads, new_id, now_ms, ssl_context
 
 PROTOCOL_VERSION = "2025-06-18"
-CLIENT_INFO = {"name": "baabaa", "version": "0.1"}
+CLIENT_INFO = {"name": "baabaa", "version": __version__}
 TIMEOUT = 60
 
 
@@ -112,17 +113,12 @@ class HttpTransport:
         if self.protocol:
             headers["MCP-Protocol-Version"] = self.protocol
         req = urllib.request.Request(self.url, data=json.dumps(msg).encode(), headers=headers, method="POST")
-        if self.public_only:
-            from .agent.web import FetchError, _NoPrivateRedirects, _check_host
-            try:
-                _check_host(urllib.parse.urlsplit(self.url).hostname or "")
-            except FetchError as exc:
-                raise MCPError(str(exc)) from None
-            opener = urllib.request.build_opener(_NoPrivateRedirects(), urllib.request.HTTPSHandler(context=ssl_context()))
-            opening = opener.open(req, timeout=TIMEOUT)
-        else:
-            opening = urllib.request.urlopen(req, timeout=TIMEOUT, context=ssl_context())
+        from .agent.web import FetchError, public_opener
         try:
+            if self.public_only:
+                opening = public_opener().open(req, timeout=TIMEOUT)
+            else:
+                opening = urllib.request.urlopen(req, timeout=TIMEOUT, context=ssl_context())
             with opening as resp:
                 sid = resp.headers.get("Mcp-Session-Id")
                 if sid:
@@ -147,6 +143,8 @@ class HttpTransport:
                     raise MCPError("the server closed the stream without a reply")
                 body = resp.read(16 * 2**20)
                 return json.loads(body) if body.strip() else {}
+        except FetchError as exc:
+            raise MCPError(str(exc)) from None
         except urllib.error.HTTPError as exc:
             raise MCPError(f"HTTP {exc.code} from the server") from exc
         except (urllib.error.URLError, OSError, ValueError) as exc:

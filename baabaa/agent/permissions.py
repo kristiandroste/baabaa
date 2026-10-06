@@ -141,15 +141,26 @@ class Context:
 
 
 def decide(tool: str, category: str, args: dict, ctx: Context) -> Decision:
+    # In plan mode nothing may change, so rules that would let something run or ask do not apply; reading
+    # a web page changes nothing, so its rules do.
+    planning = ctx.mode == "plan" and category != "net"
     for kind in ("deny", "ask", "allow"):
         for r in ctx.rules:
             if r["kind"] == kind and rule_matches(r["pattern"], tool, args, ctx.folder):
                 if kind == "deny":
                     return Decision("deny", "rule", f"Denied by the rule {r['pattern']}", r["pattern"])
-                if kind == "ask" and ctx.mode != "plan":
+                if kind == "ask" and not planning:
                     return Decision("ask", "rule", f"The rule {r['pattern']} asks first", r["pattern"])
-                if kind == "allow" and ctx.mode != "plan" and _within_reach(tool, category, args, ctx):
+                if kind == "allow" and not planning and _within_reach(tool, category, args, ctx):
                     return Decision("allow", "rule", f"Allowed by the rule {r['pattern']}", r["pattern"])
+
+    if tool == "web_fetch" and ctx.folder and not ctx.scratch:
+        # Working in a folder, a page's address could carry what the model has read there to someone else.
+        # So it asks per site, as Claude Code does ("Always allow" adds WebFetch(domain:…)); Auto's judge
+        # decides. A chat without a folder reads pages freely, as the chat apps do.
+        if ctx.mode == "auto":
+            return Decision("judge", "net", "A web page read while working in a folder")
+        return Decision("ask", "mode", "Reading a web page asks first while working in a folder")
 
     if category in ("meta", "net"):
         return Decision("allow", "safe", "Read-only or conversation-only tool")

@@ -41,7 +41,7 @@ def _clean_env_reexec() -> None:
 
 
 def main(argv=None) -> None:
-    ap = argparse.ArgumentParser(prog="baabaa", description="A LAN-only assistant and coding agent on local Ollama models.")
+    ap = argparse.ArgumentParser(prog="baabaa", description="A self-hosted assistant and coding agent on local Ollama models.")
     ap.add_argument("--data", help="data folder (default: $BAABAA_HOME or ~/.local/share/baabaa)")
     ap.add_argument("-v", "--version", action="store_true", help="print the version")
     sub = ap.add_subparsers(dest="cmd")
@@ -52,7 +52,7 @@ def main(argv=None) -> None:
         s.add_argument("--port", type=int, default=int(os.environ.get("BAABAA_PORT", 8443)))
         s.add_argument("--http", action="store_true", help="plain HTTP (no microphone or app install in browsers)")
         s.add_argument("--bind", action="append", help="address to listen on (repeatable; default: loopback + LAN)")
-        s.add_argument("--allow", action="append", help="extra client network in CIDR form (repeatable)")
+        s.add_argument("--allow", action="append", help="client network in CIDR form, in place of this computer's own subnet (repeatable)")
         s.add_argument("--name", action="append", help="extra host name clients may use (repeatable)")
         s.add_argument("--ca-port", type=int, default=0, help="plain-HTTP port that serves only the CA certificate")
         s.add_argument("--ollama", help="Ollama URL (default http://127.0.0.1:11434)")
@@ -87,8 +87,8 @@ def main(argv=None) -> None:
     m.add_argument("--vae", help="add-sdcpp: the VAE file")
     m.add_argument("--llm-vision", help="add-sdcpp: the text encoder's vision projector (for editing)")
     m.add_argument("--edit", action="store_true", help="add-sdcpp: the model can edit images")
-    m.add_argument("--staged", action="store_true", help="add-sdcpp: parts take turns in VRAM (--offload-to-cpu); "
-                   "they wait in system memory between steps")
+    m.add_argument("--staged", action="store_true", help="add-sdcpp: the model is too large to hold whole, so each part is "
+                   "read from disk into VRAM for its step")
     m.add_argument("--steps", type=int, help="add-sdcpp: default sampling steps")
     m.add_argument("--cfg", type=float, help="add-sdcpp: default guidance scale")
 
@@ -122,7 +122,7 @@ def main(argv=None) -> None:
     un = sub.add_parser("uninstall", help="remove the program; --purge also deletes baabaa's data (never Ollama or models)")
     un.add_argument("--purge", action="store_true")
     un.add_argument("--yes", action="store_true", help="do not ask")
-    au = sub.add_parser("autostart", help="start baabaa with the computer (a systemd user service)")
+    au = sub.add_parser("autostart", help="start baabaa with the computer (systemd on Linux, launchd on macOS)")
     au.add_argument("action", choices=["on", "off", "status"])
     sub.add_parser("selfcheck", help=argparse.SUPPRESS)
     nw = sub.add_parser("network", help="who can connect: this computer only (local) or the local network too (lan)")
@@ -311,6 +311,7 @@ async def _watch_pause(app) -> None:
             app.gateway.queue.pause(want)
             if want:
                 await app.llamacpp.stop()
+                await app.sdcpp.stop()
                 try:
                     for entry in await app.ollama.ps():
                         await app.gateway.unload(entry.get("name"))

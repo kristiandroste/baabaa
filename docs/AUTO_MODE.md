@@ -5,7 +5,9 @@ In Auto mode each proposed action passes three checks, in order:
 1. **Rules and safe tools** (no model call): reading inside allowed folders, searching, the task list and
    artifacts run; the account's allow, ask and deny rules apply; edits inside the working folder run,
    except protected files (`.git/`, `.env`, `BAABAA.md`, shell start-up files, CI workflows) and
-   sensitive paths (keys, credentials, system configuration), which always ask.
+   sensitive paths (keys, credentials, system configuration), which always ask. A web page fetched while
+   working in a folder goes to the judge, whose prompt names an address that carries text from the folder
+   or the conversation as high risk.
 2. **The shell check** (no model call): the command line is parsed with `shlex`, split into simple
    commands, and wrappers (`sudo`, `env`, `nohup`, `timeout`, `xargs`, `sh -c …`) are unwrapped.
    Read-only commands run; dangerous ones (privilege escalation, deleting outside the folder, disk and

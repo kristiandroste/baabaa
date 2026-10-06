@@ -22,6 +22,7 @@ t('escapeHtml', () => assert.equal(escapeHtml(`<a href="x">'&`), '&lt;a href=&qu
 t('headings', () => { has(render('# One'), '<h1>One</h1>'); has(render('### Three ###'), '<h3>Three</h3>'); lacks(render('#tag'), '<h1>'); });
 t('setext', () => has(render('Title\n====='), '<h1>Title</h1>'));
 t('paragraph breaks', () => has(render('a\nb'), 'a<br>b'));
+t('a wrapped document', () => { const h = render('a\nb\n\n- c\n  d\\\n  e', { breaks: false }); has(h, '<p>a\nb</p>'); has(h, 'c\nd<br>e'); });
 t('two paragraphs', () => assert.equal((render('a\n\nb').match(/<p>/g) || []).length, 2));
 t('hr', () => has(render('a\n\n---\n\nb'), '<hr>'));
 t('blockquote', () => has(render('> quoted **bold**'), '<blockquote><p>quoted <strong>bold</strong></p></blockquote>'));

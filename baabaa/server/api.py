@@ -66,12 +66,19 @@ class Web:
 
     # entry --------------------------------------------------------------------------------------
     async def __call__(self, req: Request):
+        resp = await self._answer(req)
+        self._secure(req, resp)  # every answer, refusals too
+        return resp
+
+    async def _answer(self, req: Request):
         if not self.guard.allowed_client(req.client_ip):
             return Response({"error": "baabaa serves the local network only"}, 403)
         if req.transport == "tcp" and not self.guard.allowed_host(req.headers.get("host")):
             return Response({"error": "Unknown host name"}, 421)
         try:
             resp = await self._dispatch(req)
+        except HTTPError as exc:
+            resp = Response({"error": exc.message, **exc.data}, exc.status)
         except (AccountError, ValueError) as exc:
             resp = Response({"error": str(exc)}, 400)
         except PermissionError as exc:
@@ -84,7 +91,6 @@ class Web:
             resp = Response({"error": f"Ollama: {exc}"}, 502)
         except RuntimeError as exc:
             resp = Response({"error": str(exc)}, 409)
-        self._secure(req, resp)
         return resp
 
     def _secure(self, req, resp) -> None:
@@ -1504,6 +1510,7 @@ class Web:
         self.app.gateway.queue.pause(info)
         if info:
             await self.app.llamacpp.stop()
+            await self.app.sdcpp.stop()
             for entry in await self._safe_ps():
                 await self.app.gateway.unload(entry.get("name"))
         self.app.stats.event("gpu_paused" if info else "gpu_resumed", req.account["id"], window=req.window)

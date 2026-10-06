@@ -9,6 +9,7 @@ read a tool call. Requests are kept in `.requests` for assertions.
 import hashlib
 import json
 import math
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -122,8 +123,8 @@ class FakeOllama:
                         with owner.lock:
                             reply = owner.replies.pop(0) if owner.replies else {"content": "(no scripted reply)"}
                     chunks = []
-                    if reply.get("thinking"):
-                        chunks.append({"message": {"role": "assistant", "content": "", "thinking": reply["thinking"]}, "done": False})
+                    for part in re.findall(r"\S+\s*", reply.get("thinking") or ""):  # word by word, as models think
+                        chunks.append({"message": {"role": "assistant", "content": "", "thinking": part}, "done": False})
                     if reply.get("content"):
                         for part in reply["content"].split(" "):
                             chunks.append({"message": {"role": "assistant", "content": part + " "}, "done": False})

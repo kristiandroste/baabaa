@@ -5,6 +5,7 @@ import { h, clear, icon, logo, tokens, ctxk, toolNote, $, bytes } from '../dom.j
 import { menu, toast, errorToast, modal, confirmDialog, promptDialog, takeKeptDraft } from '../ui.js';
 import { renderMessage, renderBlock, assistantFooter, pendingCard, enhance, attChip, copyCodeHandler, mdHTML } from './blocks.js';
 import { convMenu } from './sidebar.js';
+import { pulse } from './live.js';
 
 const MODE_ICON = { auto: 'bolt', manual: 'shield', accept_edits: 'pencil', plan: 'map' };
 const MODE_HINT = {
@@ -292,9 +293,15 @@ function blockUpdate(msgId, index, block) {
   if (!ne) return;
   ne.dataset.index = index;
   if (old) {
-    if (old.tagName === 'DETAILS' && ne.tagName === 'DETAILS' && old.open !== ne.open && block.status !== 'waiting') ne.open = old.open;
+    // a block keeps the way the person left it, open or closed; a thought that just ended folds
+    const folds = old.classList.contains('live') && !ne.classList.contains('live');
+    if (old.tagName === 'DETAILS' && ne.tagName === 'DETAILS' && old.open !== ne.open && block.status !== 'waiting' && !folds) ne.open = old.open;
     old.replaceWith(ne);
-  } else body.appendChild(ne);
+  } else {
+    body.appendChild(ne);
+    const before = body.querySelector(':scope > .thinking.live');   // the thought before this block is over
+    if (before && before !== ne) blockUpdate(msgId, Number(before.dataset.index), m.blocks[before.dataset.index]);
+  }
   scrollBottom();
 }
 
@@ -307,9 +314,12 @@ function applyDelta(d) {
   if (cur.length >= d.len) return;              // already have it (the snapshot included it)
   if (cur.length + d.text.length !== d.len) { reloadConversation(); return; }  // missed something
   b.text = cur + d.text;
+  pulse(d.msg_id, d.text);
   if (V.raf.has(d.msg_id + ':' + d.index)) return;
   V.raf.set(d.msg_id + ':' + d.index, requestAnimationFrame(() => {
     V && V.raf.delete(d.msg_id + ':' + d.index);
+    const now = S.thread.find(x => x.id === d.msg_id);
+    if (!now || now.status !== 'streaming') return;   // the reply ended in the meantime and is already drawn whole
     const el = msgEl(d.msg_id);
     if (!el) return;
     const node = el.querySelector(`.assistant-body > [data-index="${d.index}"]`);
@@ -420,7 +430,6 @@ function renderQueue() {
   clear(V.queueEl);
   const t = S.turn;
   if (!t) return;
-  if (t.queue_position) V.queueEl.appendChild(h('div', { class: 'queue-note' }, icon('cpu', 14), ` Waiting for the GPU (${t.queue_position} ahead)…`));
   for (const q of t.queued || []) V.queueEl.appendChild(h('div', { class: 'queued' }, h('span', { class: 'queued-label' }, 'Queued'), h('span', null, q)));
 }
 

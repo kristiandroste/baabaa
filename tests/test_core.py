@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from baabaa import docs, library  # noqa: E402
 from baabaa.accounts import AccountError, Accounts, hash_password, verify_password  # noqa: E402
 from baabaa.agent import permissions, shellcheck  # noqa: E402
+from baabaa.agent.loop import suggest_rule  # noqa: E402
 from baabaa.agent.checkpoints import Checkpoints  # noqa: E402
 from baabaa.agent.context import assistant_messages, build, clear_old_tool_output, CLEARED  # noqa: E402
 from baabaa.agent.judge import parse_verdict, policy  # noqa: E402
@@ -101,6 +102,24 @@ class TestPermissions(unittest.TestCase):
         self.assertEqual(d("bash", "exec", {"command": "make"}, self.ctx("plan")).action, "deny")
         self.assertEqual(d("read_file", "read", {"path": "a.py"}, self.ctx("manual")).action, "allow")
 
+    def test_web_pages(self):
+        d, url = permissions.decide, {"url": "https://docs.example.com/guide"}
+        # working in a folder: a page fetch asks per site, except in Auto, where the judge decides
+        for mode in ("manual", "accept_edits", "plan"):
+            self.assertEqual(d("web_fetch", "net", url, self.ctx(mode)).action, "ask", mode)
+        self.assertEqual(d("web_fetch", "net", url, self.ctx("auto")).action, "judge")
+        self.assertEqual(d("web_search", "net", {"query": "x"}, self.ctx("manual")).action, "allow")
+        # "Always allow" adds a site rule, which counts in every mode, plan included
+        allowed = [{"kind": "allow", "pattern": "WebFetch(domain:example.com)"}]
+        for mode in ("manual", "plan", "auto"):
+            self.assertEqual(d("web_fetch", "net", url, self.ctx(mode, allowed)).action, "allow", mode)
+        self.assertEqual(d("web_fetch", "net", {"url": "https://other.org/"}, self.ctx("manual", allowed)).action, "ask")
+        self.assertEqual(d("web_fetch", "net", url, self.ctx("plan", [{"kind": "deny", "pattern": "WebFetch"}])).action, "deny")
+        # a chat without a folder reads pages freely
+        chat = permissions.Context(mode="manual", folder="/s", rules=[], readable=["/s"], writable=["/s"], scratch="/s")
+        self.assertEqual(d("web_fetch", "net", url, chat).action, "allow")
+        self.assertEqual(suggest_rule("web_fetch", url, None), "WebFetch(domain:docs.example.com)")
+
     def test_rule_precedence_and_reach(self):
         rules = [{"kind": "allow", "pattern": "Bash"}, {"kind": "deny", "pattern": "Bash(rm:*)"}]
         c = self.ctx("manual", rules)
@@ -127,6 +146,27 @@ class TestAccounts(Tmp):
         h = hash_password("sheep")
         self.assertTrue(verify_password("sheep", h))
         self.assertFalse(verify_password("goat", h))
+        self.assertTrue(h.startswith("scrypt$32768$8$3$"))
+        # a hash from before the cost was raised still checks, and is renewed at the next sign-in
+        import base64
+        import hashlib
+        from baabaa import accounts
+        salt = b"0123456789abcdef"
+        old = "scrypt$16384$8$1${}${}".format(base64.b64encode(salt).decode(), base64.b64encode(
+            hashlib.scrypt(b"sheep", salt=salt, n=2**14, r=8, p=1, dklen=32)).decode())
+        self.assertTrue(verify_password("sheep", old))
+        self.assertTrue(accounts.outdated(old))
+        self.assertFalse(accounts.outdated(h))
+        acc = Accounts(MainDB(os.path.join(self.dir, "p.db")))
+        a = acc.create("ewe", "Ewe", "sheep", "owner")
+        acc.con.execute("UPDATE accounts SET pw_hash=? WHERE id=?", (old, a["id"]))
+        self.assertFalse(acc.check_password(a["id"], "goat", "1.2.3.4"))
+        self.assertEqual(acc.con.execute("SELECT pw_hash FROM accounts").fetchone()[0], old)
+        self.assertTrue(acc.check_password(a["id"], "sheep", "1.2.3.4"))
+        renewed = acc.con.execute("SELECT pw_hash FROM accounts").fetchone()[0]
+        self.assertTrue(renewed.startswith("scrypt$32768$8$3$") and verify_password("sheep", renewed))
+        for bad in ("scrypt$0$8$1$AAAA$AAAA", "scrypt$1073741824$8$1$AAAA$AAAA", "md5$x", "", "scrypt$a$b$c$d$e"):
+            self.assertFalse(verify_password("sheep", bad), bad)
 
     def test_accounts_sessions_grants(self):
         acc = Accounts(MainDB(os.path.join(self.dir, "m.db")))
@@ -591,6 +631,254 @@ class TestFindModels(unittest.TestCase):
         self.assertEqual(asyncio.run(scout.scout(self.jobs, "job", None, only="flock:9b"))["recommendations"], [])
         r = asyncio.run(scout.scout(self.jobs, "job", None, only="custom/model:1b"))
         self.assertIn("not one", r["note"])
+
+
+class TestWebTools(unittest.TestCase):
+    """web_fetch reaches the public internet only, and connects to the very addresses it checked."""
+
+    def test_private_addresses_and_rebinding(self):
+        import socket
+        from unittest import mock
+
+        from baabaa.agent import web
+        answers = []
+
+        def resolver(host, port=None, **kw):
+            answers.append(host)
+            ip = replies.pop(0) if len(replies) > 1 else replies[0]
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port or 0))]
+
+        class Sock:
+            connected = []
+
+            def __init__(self, *a):
+                pass
+
+            def settimeout(self, t):
+                pass
+
+            def connect(self, address):
+                Sock.connected.append(address)
+                raise ConnectionRefusedError("no network in tests")
+
+            def close(self):
+                pass
+
+        with mock.patch.object(web.socket, "getaddrinfo", resolver), mock.patch.object(web.socket, "socket", Sock):
+            for ip in ("127.0.0.1", "10.1.2.3", "192.168.1.1", "169.254.169.254", "0.0.0.0", "::1", "fe80::1%eth0"):
+                replies = [ip]
+                with self.assertRaises(web.FetchError, msg=ip) as cm:
+                    web._get("http://looks-public.example/")
+                self.assertIn("private or local address", str(cm.exception))
+            self.assertEqual(Sock.connected, [])                    # nothing was even tried
+            # a public name: the connection goes to the address that was checked
+            replies = ["93.184.216.34"]
+            with self.assertRaises(web.FetchError) as cm:
+                web._get("http://public.example/page")
+            self.assertIn("could not fetch", str(cm.exception))
+            self.assertEqual(Sock.connected, [("93.184.216.34", 80)])
+            # a name server that says "public" when asked the first time and "this computer" the next
+            Sock.connected.clear()
+            replies = ["93.184.216.34", "127.0.0.1"]
+            with self.assertRaises(web.FetchError) as cm:
+                web._get("http://rebinding.example:11434/api/tags")
+            self.assertIn("private or local address", str(cm.exception))
+            self.assertEqual(Sock.connected, [])
+        with self.assertRaises(web.FetchError):
+            web._get("file:///etc/passwd")
+        with mock.patch.dict(os.environ, {"http_proxy": "http://127.0.0.1:3128", "https_proxy": "http://127.0.0.1:3128"}):
+            self.assertFalse([h for h in web.public_opener().handlers if getattr(h, "proxies", None)])   # no proxy, ever
+
+
+class TestTerminalThread(unittest.TestCase):
+    """The thread under a reply being written, as the terminal draws it (tui/thread.py)."""
+
+    def setUp(self):
+        from baabaa.tui import thread
+        self.t = thread
+        self.now = 100.0
+        self.line = thread.ThreadLine(thread.UTF8, clock=lambda: self.now)
+
+    def run_for(self, seconds, text=None, every=0.1):
+        """Let time pass the way the terminal's loop does, 20 looks a second; `text` arrives every `every` seconds."""
+        due = 0.0
+        for _ in range(round(seconds * 20)):
+            self.now += 0.05
+            due += 0.05
+            if text and due >= every - 1e-9:
+                due = 0.0
+                self.line.pulse(text)
+            self.line.tick()
+
+    def test_states(self):
+        t, line = self.t, self.line
+        line.set("wait")
+        self.run_for(1)
+        self.assertEqual(line.text(), "╌" * 22 + "·")                       # slack, with the knot that holds its end
+        line.set("think")
+        self.run_for(3, "word ")
+        self.assertEqual(line.text(), "ℓ" * 22 + "·")                       # a loop for every tenth of a second with text
+        self.assertAlmostEqual(line.seconds, 3, places=1)
+        self.run_for(1, "A sentence ends. ", every=0.3)
+        self.assertEqual(line.text()[:8], "────────")                       # its end leaves a dash, like a tenth without text
+        self.run_for(1, "word " * 8)
+        self.assertEqual(line.text()[-1], "•")                              # past 60 tokens: a bigger knot
+        self.run_for(2, "word " * 40)
+        self.assertEqual(line.text()[-1], "●")                              # past 600: the biggest
+        self.run_for(2)                                                     # no text for two seconds
+        self.assertRegex(line.text()[:22], "^╌{18,}ℓ+$")                    # the rest of the thread hangs slack
+        self.assertGreater(line.quiet, 1.9)
+        line.set("tool")
+        seen = set()
+        for _ in range(40):
+            self.run_for(0.05)
+            self.assertEqual(line.text().count("●"), 1)
+            self.assertEqual(line.text().replace("●", "─"), "─" * 22 + "·")
+            seen.add(line.text().index("●"))
+        self.assertGreater(len(seen), 12)                                   # the bead goes to and fro
+        line.set("write")
+        self.run_for(3, "some words ")
+        self.assertEqual(line.text(), "~" * 22)                             # a ripple, and no knot
+        line.set("think")
+        self.assertEqual((line.tokens, round(line.seconds)), (0, 0))        # a new thought starts a new count
+
+    def test_long_pause_and_plain_ascii(self):
+        t = self.t
+        self.line.set("think")
+        self.run_for(1, "words ")
+        self.now += 3600                                                    # the terminal was suspended
+        self.line.tick()
+        self.assertGreaterEqual(self.line.text().count("╌"), 21)            # an hour of dashes is not replayed
+        self.assertIs(t.glyphs("UTF-8"), t.UTF8)
+        self.assertIs(t.glyphs("utf8"), t.UTF8)
+        self.assertIs(t.glyphs("ANSI_X3.4-1968"), t.ASCII)
+        self.assertIs(t.glyphs(None), t.ASCII)
+        plain = t.ThreadLine(t.ASCII, clock=lambda: self.now)
+        plain.set("think")
+        self.line = plain
+        self.run_for(1, "words ")
+        self.assertTrue(plain.text().isascii())
+        self.assertEqual(plain.text()[:10], "e" * 10)
+
+    def test_mode_and_words(self):
+        t = self.t
+        msg = lambda *blocks: {"status": "streaming", "blocks": list(blocks)}  # noqa: E731
+        self.assertEqual(t.live_mode(msg(), None), "wait")
+        self.assertEqual(t.live_mode(msg({"type": "thinking", "text": "x"}), {"queue_position": 2}), "wait")
+        self.assertEqual(t.live_mode(msg({"type": "thinking", "text": "x"}), {"queue_position": None}), "think")
+        self.assertEqual(t.live_mode(msg({"type": "thinking", "text": "x", "ms": 900}), {}), "wait")
+        self.assertEqual(t.live_mode(msg({"type": "text", "text": "Hi"}), {}), "write")
+        self.assertEqual(t.live_mode(msg({"type": "tool", "name": "bash", "status": "running"}), {}), "tool")
+        self.assertEqual(t.live_mode(msg({"type": "tool", "name": "bash", "status": "waiting"}), {}), "wait")
+        self.assertEqual(t.live_mode(msg({"type": "image", "status": "running"}), {}), "tool")
+        line = self.line
+        line.set("wait")
+        self.assertEqual(t.live_label(msg(), {"queue_position": 2}, line), "Waiting for the GPU (2 ahead)")
+        self.assertEqual(t.live_label(msg(), {}, line), "")
+        line.set("think")
+        self.now += 75.4
+        line.pulse("x")
+        self.assertEqual(t.live_label(msg({"type": "thinking"}), {}, line), "Thinking… 1 min 15 s")
+        self.now += 5.2
+        self.assertEqual(t.live_label(msg({"type": "thinking"}), {}, line), "Thinking… 1 min 21 s · quiet for 5 s")
+        line.set("tool")
+        self.assertEqual(t.live_label(msg({"type": "tool", "name": "web_search"}), {}, line), "Searching the web…")
+        self.assertEqual(t.live_label(msg({"type": "tool", "name": "files__list"}), {}, line), "Using a tool…")
+        self.assertEqual(t.live_label(msg({"type": "image"}), {}, line), "Making an image…")
+        line.set("write")
+        self.assertEqual(t.live_label(msg({"type": "text"}), {}, line), "")
+        self.now += 8
+        self.assertEqual(t.live_label(msg({"type": "text"}), {}, line), "Quiet for 8 s")
+        self.assertEqual(t.thought_label({"type": "thinking", "text": "x"}), "Thoughts")
+        self.assertEqual(t.thought_label({"ms": 300}), "Thought for 1 s")
+        self.assertEqual(t.thought_label({"ms": 125000}), "Thought for 2 min 5 s")
+        self.assertEqual([t.knot(n, t.UTF8) for n in (0, 60, 61, 600, 601)], ["·", "·", "•", "•", "●"])
+
+
+class TestTerminalApp(unittest.TestCase):
+    """The terminal app's picture of a reply being written, drawn on a stand-in screen."""
+
+    def test_a_reply_being_written(self):
+        import curses
+        from unittest import mock
+
+        from baabaa.tui import thread
+        from baabaa.tui.app import TUI
+
+        class Screen:
+            def __init__(self, rows=20, cols=78):
+                self.rows, self.cols = rows, cols
+                self.erase()
+
+            def getmaxyx(self):
+                return self.rows, self.cols
+
+            def erase(self):
+                self.cells = [[" "] * self.cols for _ in range(self.rows)]
+
+            def addstr(self, y, x, text, attr=0):
+                for i, ch in enumerate(text):
+                    if 0 <= y < self.rows and 0 <= x + i < self.cols:
+                        self.cells[y][x + i] = ch
+
+            def move(self, y, x):
+                pass
+
+            def refresh(self):
+                pass
+
+        now = [50.0]
+        me = {"account": {"id": "a", "display_name": "Guest", "settings": {}}, "modes": [{"id": "manual"}]}
+        with mock.patch.object(curses, "color_pair", lambda n: n << 8):
+            tui = TUI(None, me, None, False)
+            tui.live = thread.ThreadLine(thread.UTF8, clock=lambda: now[0])
+            tui.conv = {"id": "c1", "mode": "manual", "model": "fake:4b", "settings": {}}
+            tui.connected = True
+            scr = Screen()
+
+            def said(ev, **d):
+                tui.handle(ev, {"conv_id": "c1", **d})
+
+            def screen(seconds=0.0, text=None):
+                """What is on the screen after `seconds`, with `text` arriving every tenth of a second."""
+                m = tui.thread[-1]
+                for _ in range(round(seconds * 20)):
+                    now[0] += 0.05
+                    if text and round(now[0] * 20) % 2 == 0:
+                        b = m["blocks"][-1]
+                        said("msg.delta", msg_id=m["id"], index=len(m["blocks"]) - 1, text=text, len=len(b.get("text", "")) + len(text))
+                    tui.live_text()
+                tui.draw(scr)
+                return "\n".join("".join(row).rstrip() for row in scr.cells)
+
+            said("msg.new", message={"id": "u1", "role": "user", "blocks": [{"type": "text", "text": "Why does it stop?"}]})
+            said("msg.new", message={"id": "m1", "role": "assistant", "status": "streaming", "blocks": []})
+            said("turn", state="running", queue_position=2)
+            self.assertIn("✻ " + "╌" * 22 + "· Waiting for the GPU (2 ahead)", screen())
+            said("turn", state="running", queue_position=None)
+            said("msg.block", msg_id="m1", index=0, block={"type": "thinking", "text": ""})
+            out = screen(3, "word ")
+            self.assertIn("✻ " + "ℓ" * 22 + "· Thinking… 3 s", out)
+            self.assertNotIn("Thought", out)                         # the thought has no line of its own while it is thought
+            said("msg.block", msg_id="m1", index=0, block={"type": "thinking", "text": "word " * 30, "ms": 3100})
+            said("msg.block", msg_id="m1", index=1, block={"type": "tool", "id": "t1", "name": "bash", "status": "running",
+                                                             "args": {"command": "grep -n Downloading install.sh"}})
+            out = screen(0.5)
+            self.assertIn("· Thought for 3 s", out)
+            self.assertRegex(out, "✻ ─*●─*· Running a command…")
+            said("msg.block", msg_id="m1", index=1, block={"type": "tool", "id": "t1", "name": "bash", "status": "done", "args": {},
+                                                             "output": "161: say"})
+            said("msg.block", msg_id="m1", index=2, block={"type": "text", "text": ""})
+            out = screen(3, "words ")
+            self.assertIn("✻ " + "~" * 22, out)
+            said("msg.done", message={"id": "m1", "role": "assistant", "status": "ok", "blocks": tui.thread[-1]["blocks"],
+                                      "meta": {"output_tokens": 40, "duration_ms": 7000}, "model": "fake:4b"})
+            said("turn", state="idle")
+            out = screen(0.2)
+            self.assertNotIn("✻", out)                               # the thread goes when the reply is finished
+            self.assertIn("· Thought for 3 s", out)
+            self.assertIsNone(tui.live_text())
+
 
 if __name__ == "__main__":
     unittest.main()

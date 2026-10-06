@@ -103,21 +103,6 @@ export function icon(name, size = 18, extra = '') {
 
 export const SHEEP = `<svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 30c-5 0-8 4-7 8 1 5 6 6 9 5 1 5 6 8 11 7 4 4 11 4 15 0 5 1 9-3 9-8 3-2 4-7 1-10 1-5-3-9-8-8-2-5-8-6-12-3-4-3-10-2-12 3-3-1-6 1-6 6z"/><path d="M22 50v6M44 50v6"/><ellipse cx="17" cy="33" rx="6.5" ry="8" fill="var(--bg-elev, #fff)"/><circle cx="15" cy="31.5" r="1.3" fill="currentColor" stroke="none"/><path d="M11 28c-2-1-3-3-2-5M22 27c2-1 3-3 2-5"/></g></svg>`;
 
-// The mark while a reply is being written: the same sheep, trotting in place (app.css .sheep-busy).
-const SHEEP_BUSY = `<svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">`
-  + `<path class="sb-leg sb-leg-a" d="M22 50v6"/><path class="sb-leg sb-leg-b" d="M44 50v6"/>`
-  + `<path class="sb-wool" d="M18 30c-5 0-8 4-7 8 1 5 6 6 9 5 1 5 6 8 11 7 4 4 11 4 15 0 5 1 9-3 9-8 3-2 4-7 1-10 1-5-3-9-8-8-2-5-8-6-12-3-4-3-10-2-12 3-3-1-6 1-6 6z" fill="var(--bg, #fff)"/>`
-  + `<g class="sb-head"><ellipse cx="17" cy="33" rx="6.5" ry="8" fill="var(--bg-elev, #fff)"/><circle cx="15" cy="31.5" r="1.3" fill="currentColor" stroke="none"/><path d="M11 28c-2-1-3-3-2-5M22 27c2-1 3-3 2-5"/></g>`
-  + `</g></svg>`;
-
-export function busyMark(size = 28) {
-  const s = document.createElement('span');
-  s.className = 'logo sheep-busy';
-  s.style.width = s.style.height = size + 'px';
-  s.innerHTML = SHEEP_BUSY;
-  return s;
-}
-
 export function logo(size = 28) {
   const s = document.createElement('span');
   s.className = 'logo';

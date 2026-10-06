@@ -9,7 +9,8 @@ on any device on your network if you allow it) and to a terminal.
   edit and run things there. Browser and terminal are two views of the same history.
 - **Four modes** for actions: Manual (ask before every edit and command), Accept edits, Plan (read only,
   then a plan to approve) and Auto. Auto runs actions that pass three checks: your rules, a shell-command
-  check, and a judgement by the local model. Anything risky waits for approval.
+  check, and a judgement by the local model. Anything risky waits for approval. In a working folder, reading
+  a web page from a new site asks too ("Always allow" adds the site; in Auto the judge decides).
 - **Sandboxed tools.** Every command runs under Landlock and seccomp (Seatbelt on macOS): it can change only
   the working folder, sees only system directories and folders granted to the account, and has no network
   unless allowed (then only web ports). `baabaa doctor --sandbox` runs commands in it and checks each promise.
@@ -46,6 +47,9 @@ on any device on your network if you allow it) and to a terminal.
   documents that download as PowerPoint, Word or PDF.
 - **Usage statistics** for analysis: every model request, tool call, approval and GPU sample, as metadata
   (never content), exportable as CSV, JSON Lines or SQLite.
+- **A thread, not a spinner:** while a reply is written, a strand of wool curls as the model's words arrive,
+  hangs slack while it waits, and winds each thought into a ball of yarn, bigger for a longer thought. The
+  terminal draws the same thread as a line of text.
 - Streaming with instant stop, queued messages, branching (edit and retry), compaction, rewind (files
   and conversation), artifacts (web pages, documents, diagrams, code; a complete page written in a reply
   becomes one too), uploads (text, code, PDF, Office,
@@ -76,9 +80,10 @@ No dependencies: the Python standard library and hand-written HTML, CSS and Java
 curl -fsSL https://github.com/kristiandroste/baabaa/releases/latest/download/install.sh | sh
 ```
 
-No sudo and no pip. The installer checks Python, Ollama and the GPU, downloads the release and checks its
-SHA-256, puts baabaa in `~/.local/lib/baabaa` and the `baabaa` command in `~/.local/bin`, then asks whether
-to start baabaa now and whether to start it with the computer. `sh -s -- latest` installs from the latest
+No sudo and no pip. The installer needs Python 3.10 or newer, downloads the release and checks its SHA-256,
+puts baabaa in `~/.local/lib/baabaa` and the `baabaa` command in `~/.local/bin`, says whether it found Ollama
+and a GPU, and asks three things: whether other devices on your network may connect (no, unless you say so),
+whether to start baabaa now, and whether to start it with the computer. `sh -s -- latest` installs from the latest
 channel and `sh -s -- 1.2.3` a given version. The self-contained installer `baabaa-VERSION-install.sh`
 carries the program inside and installs the same way without a download: `sh baabaa-0.9.0-install.sh`.
 
@@ -86,7 +91,7 @@ carries the program inside and installs the same way without a download: `sh baa
 
 ```sh
 baabaa doctor        # checks Python, SQLite, Landlock, GPU, Ollama and the installation
-baabaa start         # the server, in the background: HTTPS on port 8443, loopback and your LAN address
+baabaa start         # the server, in the background, on port 8443
 baabaa status        # is it running, where to open it, what the GPU is doing, updates
 baabaa stop          # stops it, with its model servers; `baabaa restart` starts it again, same options
 baabaa autostart on  # start it with the computer (systemd on Linux, launchd on macOS); `off` undoes it
@@ -98,15 +103,17 @@ baabaa network       # who can connect: this computer only, or other devices too
 runs per data folder.
 
 The first start prints a setup link for the owner account (`baabaa status` shows it again until the
-account exists). The home screen then offers models from the Ollama library that fit your GPU; installing
-one downloads it, runs the fit test and leaves it for you to approve in **Settings → Models**. Approved
-models appear in the model picker.
+account exists; a browser on the same computer needs no link). The home screen then offers to find a first
+model: it suggests models from the Ollama library that fit your GPU. Installing one downloads it and runs the
+fit test; you then approve it in **Settings → Models**. Approved models appear in the model picker.
+
+New to all this? [docs/TUTORIAL.md](docs/TUTORIAL.md) goes through it step by step.
 
 When other devices may connect, install the local certificate authority once on each (`/ca.crt`, or run with
 `--ca-port 8080` to serve it over plain HTTP) so the browser trusts baabaa and allows the microphone.
 
-Terminal: `baabaa` in a folder starts a conversation that works in that folder (`--no-folder` for a plain
-chat; `/help` for commands; `/research QUESTION` for a research report).
+Terminal: `baabaa` in a folder starts a conversation that works in that folder (`baabaa chat --no-folder`
+for a plain chat; `/help` for commands; `/research QUESTION` for a research report).
 
 When another program needs the GPU: `baabaa gpu pause --reason "…"` (or the switch in **Settings →
 Models**) unloads baabaa's models and holds new GPU work in the queue until `baabaa gpu resume`.
@@ -118,9 +125,9 @@ Accounts from the command line: `baabaa account add NAME [--password]`, `account
 ## Update
 
 An installed baabaa checks for a new release once a day (a download of the release list from GitHub, which
-carries nothing about you) and downloads it ahead of time. Owners, or every account if an owner allows it in
-**Settings → About**, then see a notice: **Install** when a release is available, **Restart** when it is
-downloaded or installed and only a restart is left. A restart waits for the replies being written (or goes
+carries nothing about you) and downloads it ahead of time. Every account then sees a notice (an owner can
+leave installing and restarting to owners, in **Settings → About**): **Install** when a release is available,
+**Restart** when it is downloaded or installed and only a restart is left. A restart waits for the replies being written (or goes
 at once); open windows reconnect and load the new version by themselves, keeping a message being typed.
 The terminal UI says the same and has `/update` and `/restart`.
 
@@ -159,7 +166,7 @@ version, and `current`), the command in `~/.local/bin/baabaa`.
 ## Network
 
 Who can connect is the owner's choice: the installer asks, `baabaa network local|lan` changes it, and so does
-**Settings → About → Network** (a restart applies it).
+**Settings → About → Network** (a restart applies it). A new data folder starts with this computer only.
 
 - **This computer only** (`local`): baabaa listens on 127.0.0.1 over plain HTTP, at `http://localhost:8443`.
   Browsers treat localhost as secure, so the microphone and app install work without a certificate.
@@ -167,7 +174,7 @@ Who can connect is the owner's choice: the installer asks, `baabaa network local
   over HTTPS with its own certificate authority (install `/ca.crt` once on each device), and accepts clients
   from loopback and that subnet. Every account without a password can then be opened by anyone on the network.
 
-Data folders from before this setting keep `lan`. In both modes IPv6 is not served, requests must use one of
+Data folders from before this setting existed keep `lan`. In both modes IPv6 is not served, requests must use one of
 the host's own names or addresses (against DNS rebinding), and state-changing requests need a CSRF token and a
 same-origin `Origin`. Options: `--bind` (choose the addresses yourself), `--allow CIDR`, `--name HOST`,
 `--port`, `--http`.
@@ -178,15 +185,18 @@ From a checkout, `bin/baabaa` runs that folder's copy (link it once: `ln -s "$PW
 A checkout does not update itself; after a `git pull`, the browser offers a restart.
 
 ```sh
-python3 -m unittest discover -s tests        # Python tests (no GPU needed)
-node tests/js/markdown.test.mjs              # renderer tests (Node 18+)
+python3 -m unittest discover -s tests                # Python tests (no GPU needed)
+for t in tests/js/*.test.mjs; do node "$t"; done     # renderer tests (Node 18+)
 ```
 
 The Python tests use stand-ins for Ollama and llama.cpp (`tests/fixtures/`), so they need no GPU.
 
+How baabaa is built: [docs/DEVELOPING.md](docs/DEVELOPING.md). A first walk through it, for anyone:
+[docs/TUTORIAL.md](docs/TUTORIAL.md).
 Statistics schema: [docs/STATISTICS.md](docs/STATISTICS.md). HTTP API: [docs/API.md](docs/API.md).
 Auto mode: [docs/AUTO_MODE.md](docs/AUTO_MODE.md). Other model programs: [docs/RUNTIMES.md](docs/RUNTIMES.md).
-Making a release: [docs/RELEASING.md](docs/RELEASING.md).
+Making a release, and the website: [docs/RELEASING.md](docs/RELEASING.md). What baabaa protects, and its limits:
+[SECURITY.md](SECURITY.md).
 
 ## License
 

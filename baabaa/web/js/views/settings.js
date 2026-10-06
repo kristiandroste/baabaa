@@ -358,14 +358,17 @@ async function connectors(pane) {
     d.can_add_programs ? h('option', { value: 'stdio' }, 'Program on this computer') : null);
   const target = h('input', { class: 'input mono', placeholder: 'https://example.com/mcp' });
   const extra = h('input', { class: 'input mono', placeholder: 'Headers: Authorization=Bearer … (optional)' });
+  // a program on this computer runs outside the sandbox: the server asks for the owner's password again
+  const password = h('input', { class: 'input', type: 'password', placeholder: 'Your password', autocomplete: 'current-password', hidden: true });
   kind.addEventListener('change', () => {
+    password.hidden = kind.value !== 'stdio';
     target.placeholder = kind.value === 'stdio' ? 'Command and arguments, e.g. npx -y @modelcontextprotocol/server-memory' : 'https://example.com/mcp';
     extra.placeholder = kind.value === 'stdio' ? 'Environment: KEY=value KEY2=value (optional)' : 'Headers: Authorization=Bearer … (optional)';
   });
   const add = async () => {
     const pairs = Object.fromEntries(extra.value.split(/\s+(?=[\w-]+=)/).filter(Boolean).map(s => [s.split('=')[0], s.split('=').slice(1).join('=')]));
     const body = { name: name.value.trim(), transport: kind.value };
-    if (kind.value === 'stdio') { const parts = target.value.trim().split(/\s+/); body.command = parts[0]; body.args = parts.slice(1); body.env = pairs; }
+    if (kind.value === 'stdio') { const parts = target.value.trim().split(/\s+/); body.command = parts[0]; body.args = parts.slice(1); body.env = pairs; body.password = password.value; }
     else { body.url = target.value.trim(); body.headers = pairs; }
     try { await post('/api/connectors', body); toast('Added'); reload(); } catch (e) { errorToast(e); }
   };
@@ -373,7 +376,7 @@ async function connectors(pane) {
     h('p', { class: 'muted small' }, 'Connectors are MCP servers that give baabaa more tools. When there are many, the model finds the ones it needs with a search, so they do not fill its context. Tools a server marks read-only run directly; others follow the conversation’s mode.'),
     d.can_add_programs ? h('p', { class: 'muted small' }, 'A program on this computer runs with your own permissions, outside the tool sandbox. Add only programs you trust.') : null,
     list),
-    section('Add a connector', h('div', { class: 'form-grid' }, name, kind), target, extra, h('div', { class: 'dialog-actions' }, h('button', { class: 'btn btn-primary', type: 'button', onclick: add }, 'Add'))));
+    section('Add a connector', h('div', { class: 'form-grid' }, name, kind), target, extra, password, h('div', { class: 'dialog-actions' }, h('button', { class: 'btn btn-primary', type: 'button', onclick: add }, 'Add'))));
 }
 
 // Usage --------------------------------------------------------------------------------------------------------------
@@ -412,7 +415,7 @@ function accountCard(a) {
   const gaccess = h('select', { class: 'input' }, h('option', { value: 'rw' }, 'read-write'), h('option', { value: 'ro' }, 'read-only'));
   return h('div', { class: 'acct' },
     h('div', { class: 'acct-head' }, avatar(a, 36), h('div', null, h('strong', null, a.display_name), h('div', { class: 'muted small' }, `${a.name} · ${a.role === 'owner' ? 'Owner' : 'Member'} · ${a.has_password ? 'password' : 'no password'}${a.disabled ? ' · disabled' : ''}`))),
-    a.role !== 'owner' ? row('Needs the owner’s approval in Auto mode', switchEl(a.require_owner_approval, v => upd({ require_owner_approval: v }))) : null,
+    a.role !== 'owner' ? row('Actions that ask need an owner’s approval', switchEl(a.require_owner_approval, v => upd({ require_owner_approval: v }))) : null,
     h('div', { class: 'acct-actions' },
       h('button', { class: 'btn small', type: 'button', onclick: () => upd({ role: a.role === 'owner' ? 'user' : 'owner' }) }, a.role === 'owner' ? 'Make member' : 'Make owner'),
       h('button', { class: 'btn small', type: 'button', onclick: async () => { const p = await promptDialog('Set password', 'New password (empty removes it)', '', 'Save', { type: 'password' }); if (p !== null) upd({ password: p || null }); } }, 'Password'),

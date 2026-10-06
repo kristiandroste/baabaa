@@ -17,8 +17,9 @@ SESSION_TTL_MS = 30 * 24 * 3600 * 1000
 COLORS = ["#2f7d6d", "#7a5c99", "#b5563c", "#3d6fb6", "#8a7a2c", "#a0476f", "#4f7f3a", "#5b6470"]
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,31}$")
 
-# scrypt cost: 16 MiB of memory per hash, ~50 ms on a laptop CPU.
-_N, _R, _P = 2**14, 8, 1
+# scrypt cost: 32 MiB of memory and about 0.2 s per hash on a laptop CPU (measured 2026-10-05). The cost is
+# stored with each hash, so older, cheaper hashes still check, and are renewed at the next sign-in.
+_N, _R, _P = 2**15, 8, 3
 
 
 class AccountError(Exception):
@@ -27,7 +28,7 @@ class AccountError(Exception):
 
 def hash_password(password: str) -> str:
     salt = os.urandom(16)
-    digest = hashlib.scrypt(password.encode(), salt=salt, n=_N, r=_R, p=_P, dklen=32)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=_N, r=_R, p=_P, maxmem=256 * _N * _R, dklen=32)
     return "scrypt${}${}${}${}${}".format(
         _N, _R, _P, base64.b64encode(salt).decode(), base64.b64encode(digest).decode()
     )
@@ -39,10 +40,18 @@ def verify_password(password: str, stored: str) -> bool:
         if scheme != "scrypt":
             return False
         salt, digest = base64.b64decode(salt_b64), base64.b64decode(digest_b64)
-        test = hashlib.scrypt(password.encode(), salt=salt, n=int(n), r=int(r), p=int(p), dklen=len(digest))
+        n, r, p = int(n), int(r), int(p)
+        if not (1 < n <= 2**20 and 0 < r <= 32 and 0 < p <= 16):  # a stored cost nobody here ever wrote
+            return False
+        test = hashlib.scrypt(password.encode(), salt=salt, n=n, r=r, p=p, maxmem=256 * n * r, dklen=len(digest))
         return hmac.compare_digest(test, digest)
     except (ValueError, TypeError):
         return False
+
+
+def outdated(stored: str) -> bool:
+    """A hash made with a cost other than today's."""
+    return stored.split("$")[1:4] != [str(_N), str(_R), str(_P)]
 
 
 def _token_hash(token: str) -> str:
@@ -146,6 +155,8 @@ class Accounts:
         if not ok:
             recent.append(time.monotonic())
             self._failures[key] = recent
+        elif r["pw_hash"] is not None and outdated(r["pw_hash"]):
+            self.con.execute("UPDATE accounts SET pw_hash=? WHERE id=?", (hash_password(password), account_id))
         return ok
 
     def open_session(self, account_id: str, client: str, ip: str) -> tuple[str, str]:

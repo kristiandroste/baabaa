@@ -1,0 +1,33 @@
+# Builds the website (tools/website.py: landing page, documents, preview) and publishes it with GitHub Pages.
+# It runs only when someone starts it by hand, and Pages has to be turned on for the repository first:
+# nothing here goes live by itself. The build happens on GitHub's machine, so nothing of anyone's own
+# computer can end up in it.
+name: website
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: build the site
+        run: python tools/website.py build --out _site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: _site
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1

@@ -15,6 +15,7 @@ import unicodedata
 
 from .. import __version__
 from .client import ApiError, Client
+from .thread import ThreadLine, glyphs, knot, live_label, live_mode, thought_label
 
 MODE_GLYPH = {"auto": "⏵⏵", "manual": "⏸", "accept_edits": "✎", "plan": "▤"}
 COMMANDS = [
@@ -82,6 +83,8 @@ class TUI:
         self.use_folder = use_folder
         self.quit_armed = 0
         self.paste = None
+        self.live = ThreadLine(glyphs(locale.getpreferredencoding(False)))  # the thread under a reply being written
+        self.live_shown = None
 
     # data ----------------------------------------------------------------------------------------------
     def load_models(self):
@@ -163,6 +166,7 @@ class TUI:
                 cur = b.get("text", "")
                 if len(cur) + len(d["text"]) == d["len"]:
                     b["text"] = cur + d["text"]
+                    self.live.pulse(d["text"])
                 elif len(cur) < d["len"]:
                     self.open(self.conv["id"])
                 self.invalidate()
@@ -446,8 +450,10 @@ class TUI:
                 for b in m["blocks"]:
                     t = b.get("type")
                     if t == "thinking":
-                        live = m.get("status") == "streaming"
-                        L.append([("✻ " + ("Thinking…" if live else "Thought"), DIM | curses.A_ITALIC)])
+                        # a thought being thought has only its text here (the thread under the reply says so);
+                        # a finished one is a knot, bigger for a longer thought
+                        if not (m.get("status") == "streaming" and b is m["blocks"][-1] and b.get("ms") is None):
+                            L.append([(f"{knot(len(b.get('text', '')) / 4, self.live.g)} {thought_label(b)}", DIM | curses.A_ITALIC)])
                         if self.verbose:
                             add(b.get("text", ""), DIM, "  ")
                     elif t == "text":
@@ -458,8 +464,6 @@ class TUI:
                         add("✗ " + b.get("text", ""), ERR)
                     elif t == "notice":
                         add("· " + b.get("text", ""), DIM)
-                if m.get("status") == "streaming" and not m["blocks"]:
-                    L.append([("…", DIM)])
                 meta = m.get("meta") or {}
                 if m.get("status") != "streaming" and (meta.get("output_tokens") or m.get("status") == "stopped"):
                     info = [m.get("model") or "", f"{meta.get('output_tokens', 0)} tokens", f"{(meta.get('duration_ms') or 0) / 1000:.1f} s"]
@@ -468,6 +472,27 @@ class TUI:
                     L.append([(" · ".join(i for i in info if i), DIM)])
         self.lines_cache = (cols, L)
         return L
+
+    # the thread under a reply being written (thread.py) -----------------------------------------------------
+    def live_message(self):
+        m = self.thread[-1] if self.thread else None
+        return m if m and m.get("role") == "assistant" and m.get("status") == "streaming" else None
+
+    def live_text(self) -> tuple[str, str] | None:
+        """The thread and the words beside it, as they are now; None when no reply is being written."""
+        m = self.live_message()
+        if m is None:
+            self.live.set("off")
+            return None
+        self.live.set(live_mode(m, self.turn))
+        if self.live.mode == "think":  # a window opened part-way through a thought still gets a knot of the right size
+            self.live.tokens = max(self.live.tokens, len(m["blocks"][-1].get("text", "")) / 4)
+        self.live.tick()
+        return f"{self.live.g['mark']} {self.live.text()}", live_label(m, self.turn, self.live)
+
+    def live_lines(self) -> list[list[tuple[str, int]]]:
+        now = self.live_shown = self.live_text()
+        return [[(now[0], curses.color_pair(1)), (" " + now[1], curses.color_pair(2))]] if now else []
 
     def _markdown(self, L, text, cols):
         A, DIM, CODE = curses.color_pair(1), curses.color_pair(2), curses.color_pair(6)
@@ -575,7 +600,7 @@ class TUI:
         hint_lines = self.command_hints(cols)
         bottom = in_h + 2 + len(prompt_lines) + len(hint_lines)
         area = rows - bottom
-        lines = self.build_lines(cols - 1)
+        lines = self.build_lines(cols - 1) + self.live_lines()
         total = len(lines)
         self.scroll = max(0, min(self.scroll, max(0, total - area)))
         start = max(0, total - area - self.scroll)
@@ -649,7 +674,8 @@ class TUI:
         W, B = curses.color_pair(4), curses.A_BOLD
         out = []
         if p["kind"] == "approval":
-            what = (p.get("args") or {}).get("command") or (p.get("args") or {}).get("path") or p.get("tool")
+            a = p.get("args") or {}
+            what = a.get("command") or a.get("path") or a.get("url") or p.get("tool")
             out.append((f"  Allow {p.get('tool')}: {what}"[: cols - 2], W | B))
             reason = (p.get("decision") or {}).get("reason")
             if reason:
@@ -921,6 +947,10 @@ class TUI:
                         self.dirty = True
                     elif self.key(k) == "escape":
                         pending_esc = time.time()
+                    self.dirty = True
+                live = self.live_text()
+                if live != self.live_shown:  # the thread moved, or its words changed
+                    self.live_shown = live
                     self.dirty = True
                 if self.dirty:
                     self.dirty = False

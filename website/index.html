@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-font="serif">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>baabaa: your own assistant and coding agent, on your own GPU</title>
+<meta name="description" content="baabaa is a self-hosted assistant and coding agent for local models. It runs on your computer through Ollama, for you or for everyone on your network.">
+<meta http-equiv="Content-Security-Policy" content="{{csp}}">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="preview/img/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="preview/css/app.css">
+<link rel="stylesheet" href="site.css">
+<script src="preview/js/thread.js" defer></script>
+<script src="site.js" defer></script>
+</head>
+<body class="site">
+<header class="top">
+  <a class="brand" href="./"><img src="preview/img/logo.svg" alt="" width="30" height="30"><span>baabaa</span></a>
+  <nav>
+    <a href="preview/">Preview</a>
+    <a href="docs/?docs/TUTORIAL.md">Tutorial</a>
+    <a href="docs/">Documents</a>
+    <a href="https://github.com/kristiandroste/baabaa">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Your own assistant and coding agent, on your own GPU</h1>
+    <p class="lede">baabaa gives the models you run with Ollama the things a model alone lacks: conversations that are kept,
+      projects, memory, artifacts, and an agent that reads, edits and runs code in your folders. It runs on your computer,
+      for you or for everyone on your network, and nothing leaves it.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="preview/">Try the preview</a>
+      <a class="btn" href="#install">Install</a>
+    </div>
+    <div class="stage" aria-hidden="true">
+      <div class="th" id="strand"></div>
+      <p class="stage-label" id="strandLabel">Thinking…</p>
+    </div>
+    <p class="caption">While baabaa works, a strand of wool curls as the model's words arrive, so you can see that it is alive.
+      The <a href="preview/">preview</a> is the real interface with recorded replies; it runs no model.</p>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <div class="command"><code id="command">curl -fsSL https://github.com/kristiandroste/baabaa/releases/latest/download/install.sh | sh</code>
+      <button class="btn" type="button" id="copy">Copy</button></div>
+    <p>No sudo and no pip. The installer checks what you have, downloads the release and verifies it, and asks whether to start
+      baabaa. The <a href="docs/?docs/TUTORIAL.md">tutorial</a> walks through every step, from an empty machine to the first reply.</p>
+    <ul class="needs">
+      <li><strong>Linux</strong> with an NVIDIA GPU, or a <strong>Mac with Apple silicon</strong> (new: models on a Mac's GPU are not tested yet).</li>
+      <li><a href="https://ollama.com/download">Ollama</a> on the same machine, and Python 3.10 or newer.</li>
+      <li>Nothing else: baabaa is the Python standard library and hand-written HTML, CSS and JavaScript.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="grid">
+      <div><h3>Chat and code in one place</h3><p>A conversation is a chat. Give it a working folder and it reads, edits and runs things there. The browser and the terminal show the same history.</p></div>
+      <div><h3>You decide what runs</h3><p>Four modes, from asking before every edit and command to Auto, where safe actions run and anything risky waits for you.</p></div>
+      <div><h3>Tools in a sandbox</h3><p>Every command the model runs can change only the working folder and has no network unless you allow it.</p></div>
+      <div><h3>Models that fit your GPU</h3><p>A model is offered only after a test shows it loads entirely into GPU memory. Nothing falls back to the CPU.</p></div>
+      <div><h3>What a model alone forgets</h3><p>Projects with their own instructions and documents, memory across conversations, search of earlier chats, artifacts beside the chat.</p></div>
+      <div><h3>Yours</h3><p>Accounts for the people in your home or office, each with their own conversations. No cloud, no telemetry: usage statistics stay on your machine.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Read on</h2>
+    <ul class="links">
+      <li><a href="docs/?docs/TUTORIAL.md">Tutorial</a>: install it and get your first reply.</li>
+      <li><a href="docs/?README.md">Reference</a>: every feature, command and setting.</li>
+      <li><a href="docs/?docs/DEVELOPING.md">Developer guide</a>: how baabaa is built, for people who want to change it.</li>
+      <li><a href="docs/?CHANGELOG.md">Changelog</a>: what each release brought.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <p>baabaa {{version}} · free software under the <a href="docs/?LICENSE">GNU AGPL, version 3</a> · <a href="https://github.com/kristiandroste/baabaa">source</a></p>
+  <p class="muted">This site sets no cookies and loads nothing from other sites.</p>
+</footer>
+</body>
+</html>

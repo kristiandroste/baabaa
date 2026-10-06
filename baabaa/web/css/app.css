@@ -143,7 +143,10 @@ select.input { width: auto; min-width: 160px; }
 .sb-item-icon { color: var(--text-3); }
 .sb-more { opacity: 0; width: 26px; height: 26px; }
 .sb-item:hover .sb-more, .sb-item.active .sb-more { opacity: 1; }
-.sb-running { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse .8s infinite alternate; flex: none; }
+.sb-running { width: 24px; height: 11px; color: var(--accent); flex: none; line-height: 0; }
+.sb-running svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.sb-running path { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 100 110; animation: th-curl 2s ease-in-out infinite; }
+@keyframes th-curl { 0% { stroke-dashoffset: 105; } 45%, 58% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -105; } }
 .sb-empty { padding: 20px 10px; color: var(--text-3); font-size: 13.5px; }
 .sb-foot { border-top: 1px solid var(--border); padding: 8px; display: grid; gap: 6px; }
 .sb-status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-3); padding: 2px 8px; min-height: 20px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -203,19 +206,16 @@ select.input { width: auto; min-width: 160px; }
 .compaction { border: 1px dashed var(--border-strong); border-radius: var(--radius); padding: 8px 14px; color: var(--text-2); font-size: 14px; }
 .compaction summary { cursor: pointer; display: flex; align-items: center; gap: 6px; }
 .typing { display: inline-flex; gap: 4px; padding: 8px 0; }
-/* the sheep at the foot of a reply being written: it trots in place, its wool breathing */
-.working { padding: 6px 0 2px; line-height: 0; }
-.sheep-busy svg { overflow: visible; animation: sb-hop 1.1s ease-in-out infinite; transform-origin: 50% 90%; }
-.sheep-busy .sb-wool { animation: sb-puff 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.sheep-busy .sb-head { animation: sb-nod 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: 60% 20%; }
-.sheep-busy .sb-leg { transform-box: fill-box; transform-origin: 50% 0; animation: sb-step .55s ease-in-out infinite alternate; }
-.sheep-busy .sb-leg-b { animation-delay: -.55s; }
-@keyframes sb-hop { 0%, 60%, 100% { transform: translateY(0) scaleY(1); } 30% { transform: translateY(-3px) scaleY(1.02); } 68% { transform: translateY(0) scaleY(.95); } }
-@keyframes sb-puff { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-@keyframes sb-nod { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-7deg); } }
-@keyframes sb-step { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
-@keyframes sb-fade { from { opacity: .45; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .sheep-busy svg { animation: sb-fade 1.2s infinite alternate !important; } }
+/* the thread at the foot of a reply being written (js/thread.js): wool from the sheep, curling as text arrives */
+.working { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; padding: 4px 0 0; min-height: 38px; }
+.working .th { width: 190px; flex: none; }
+.working-label { font: 14px/1.3 var(--sans); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.th { display: block; line-height: 0; color: var(--accent); --th-surface: var(--bg); }
+.th svg { display: block; width: 100%; height: auto; overflow: visible; }
+.th .wool { animation: th-puff 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.th .eye { animation: th-blink 4.6s infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes th-puff { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes th-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.12); } }
 .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); animation: pulse .6s infinite alternate; }
 .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
 .notice { font-family: var(--sans); font-size: 13.5px; color: var(--text-2); background: var(--bg-hover); border-radius: var(--radius-sm); padding: 8px 12px; display: flex; gap: 8px; align-items: center; }
@@ -269,7 +269,9 @@ select.input { width: auto; min-width: 160px; }
 .thinking summary { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border-radius: 8px; list-style: none; }
 .thinking summary::-webkit-details-marker { display: none; }
 .thinking summary:hover { background: var(--bg-hover); }
-.msg-assistant.streaming .thinking-label { animation: pulse .9s infinite alternate; }
+.thinking .ball { display: inline-flex; justify-content: center; width: 26px; flex: none; color: var(--accent); --th-surface: var(--bg); }
+.thinking .ball svg { display: block; overflow: visible; }
+.thinking.live > summary, .thinking.live:not([open]) { display: none; }   /* being thought: the thread below says so */
 .thinking-text { white-space: pre-wrap; border-left: 2px solid var(--border-strong); padding: 4px 0 4px 14px; margin: 6px 0 4px 10px; color: var(--text-3); font-size: 13.5px; max-height: 360px; overflow-y: auto; }
 
 /* tool cards */
@@ -369,7 +371,6 @@ select.input { width: auto; min-width: 160px; }
 .todo-card { border: 1px solid var(--border); background: var(--bg-elev); border-radius: 12px; padding: 8px 12px; font-size: 13.5px; }
 .todo-card summary { cursor: pointer; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
 .todo-card .todos { margin-top: 6px; max-height: 180px; overflow-y: auto; }
-.queue-note { font-size: 12.5px; color: var(--warn); display: flex; align-items: center; gap: 6px; padding: 0 6px; }
 .queued { display: flex; gap: 8px; align-items: center; font-size: 13px; border: 1px dashed var(--border-strong); border-radius: 10px; padding: 6px 10px; color: var(--text-2); }
 .queued-label { font-size: 11.5px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 

@@ -80,6 +80,9 @@ class App:
         self.events.broadcast("queue", data, exclude=owner if running and running.get("label") else None)
         if owner and running.get("label"):
             self.events.publish(owner, "queue", {**data, "running": {**data["running"], "label": running["label"]}})
+        agent = getattr(self, "agent", None)
+        if agent is not None:
+            agent.queue_moved()  # a reply waiting for the GPU learns how many are ahead of it
 
     def ollama_ram_caps(self) -> list[str] | None:
         """Ollama service settings still needed to cap its RAM caches (ollama.py); cached a minute."""

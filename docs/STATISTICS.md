@@ -45,7 +45,8 @@ Get the data: **Settings → Usage → Export** (CSV or JSON Lines per table, or
 ## `tool_calls` — one row per tool the agent called
 
 `tool`, `mode` (manual, accept_edits, plan, auto), `decision` (allow, ask, deny), `layer` (what decided:
-`safe`, `rule`, `mode`, `shell`, `path`, `judge`), `duration_ms`, `exit_code` (commands), `output_bytes`,
+`safe`, `rule`, `mode`, `shell`, `path`, `judge`, `sandbox` for a chat's own folder, `hook`, `mcp` for a
+connector's tool), `duration_ms`, `exit_code` (commands), `output_bytes`,
 `sandbox_denied`, `error`.
 
 ## `approvals` — one row per action held for a person
@@ -62,8 +63,10 @@ duration_ms, model), `conversation_created`, `conversation_deleted`, `model_swit
 `compaction` (reason, tokens_before, tokens_after), `rewind`, `fork`, `branch_switched`, `regenerate`,
 `stop`, `export` (format), `upload` (kind, mime, bytes, extracted_chars), `artifact` (action, kind, chars;
 source `reply` for a page the model wrote in its reply),
-`search` (terms), `login`, `login_failed`, `window_open`, `window_close`, `model_approved`,
-`model_removed`, `model_registered` (runtime), `account_created`, `stats_export`, `gpu_paused`, `gpu_resumed`,
+`search` (terms: how many words, never the words), `feedback` (rating, model, with_note: whether a note was
+written, never the note), `login`, `login_failed`, `window_open`, `window_close`, `model_approved`,
+`model_unapproved`, `model_removed`, `model_registered` (runtime), `account_created`, `api_key_created`,
+`stats_export`, `stats_snapshot`, `gpu_paused`, `gpu_resumed`,
 `ollama_stuck` (model, attempt: Ollama stopped answering for a model and baabaa unloaded it), `recovery`
 (kind, model: baabaa sent the model back to work; kind `parse_error` when Ollama could not read its tool call,
 `text_call` for a tool call written as text, `empty_reply` for a turn ending without a reply,
@@ -83,6 +86,10 @@ count, bytes, kinds), `file_downloaded` (bytes, ext), `research` (queries, sourc
 seconds), `image_generated` (model, width, height, edit, seconds, bytes), `dictation` (bytes, chars,
 seconds, model), `schedule_created` (kind), `schedule_run` (manual, kind, research), `share_created`
 (recipients, everyone, messages), `share_copied`, `worktree_created`.
+
+Customization: `skill_used` (skill, source, routed: whether baabaa loaded it for the turn itself),
+`command_used` (command: the slash command's name), `hook` (hook_event, tool, exit_code, duration_ms),
+`customization_saved` (kind), `connector_added` (transport).
 
 ## `jobs` — model installs, fit tests and model searches
 

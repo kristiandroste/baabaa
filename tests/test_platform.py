@@ -70,11 +70,20 @@ class TestNetworkMode(unittest.TestCase):
         from baabaa.maindb import MainDB
         with tempfile.TemporaryDirectory() as d:
             db = MainDB(Path(d) / "baabaa.db")
-            self.assertEqual(lan.saved_mode(db), "lan")  # data folders from before the setting
-            db.set_setting("network", "local")
-            self.assertEqual(lan.saved_mode(db), "local")
-            db.set_setting("network", "everyone")
+            self.assertEqual(lan.saved_mode(db), "local")  # a new data folder: this computer only
+            db.set_setting("network", "lan")
             self.assertEqual(lan.saved_mode(db), "lan")
+            db.set_setting("network", "everyone")
+            self.assertEqual(lan.saved_mode(db), "local")
+        with tempfile.TemporaryDirectory() as d:  # a data folder from before the choice existed keeps the local network
+            from baabaa import db as sqlite
+            from baabaa.maindb import MIGRATIONS
+            con = sqlite.connect(Path(d) / "baabaa.db")
+            sqlite.migrate(con, MIGRATIONS[:4])
+            con.execute("INSERT INTO accounts (id, name, display_name, color, role, created_ms, updated_ms) "
+                        "VALUES ('a', 'shepherd', 'Shepherd', '#2f7d6d', 'owner', 1, 1)")
+            con.close()
+            self.assertEqual(lan.saved_mode(MainDB(Path(d) / "baabaa.db")), "lan")
 
     def test_server_on_this_computer_only(self):
         """A data folder set to this computer only: the server listens on 127.0.0.1 alone, over plain HTTP."""
@@ -115,7 +124,7 @@ class TestNetworkMode(unittest.TestCase):
             run = lambda *a: subprocess.run([str(ROOT / "bin" / "baabaa"), *a], env=env, cwd="/",  # noqa: E731
                                             capture_output=True, text=True, timeout=60)
             self.assertEqual(run("account", "add", "shepherd").returncode, 0)
-            self.assertIn("this computer and other devices", run("network").stdout)
+            self.assertIn("this computer only", run("network").stdout)  # where a new data folder starts
             r = run("network", "lan")
             self.assertIn("anyone on your network could open them: shepherd", r.stdout)
             r = run("network", "local")

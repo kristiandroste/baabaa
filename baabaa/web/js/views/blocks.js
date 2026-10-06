@@ -1,8 +1,9 @@
 // Rendering messages and their blocks (text, thinking, tool calls, approvals, questions, plans).
 import { S } from '../app.js';
 import { post, downloadFrom } from '../api.js';
-import { h, clear, icon, esc, duration, tokens, copyText, bytes, busyMark } from '../dom.js';
+import { h, clear, icon, esc, duration, tokens, copyText, bytes } from '../dom.js';
 import { toast, errorToast } from '../ui.js';
+import { workingRow } from './live.js';
 
 // Markdown ----------------------------------------------------------------------------------------
 export function mdHTML(text, streaming = false) {
@@ -99,7 +100,7 @@ function renderAssistant(m, ctx) {
   const body = h('div', { class: 'assistant-body' });
   const el = h('div', { class: 'msg msg-assistant' + (m.status === 'streaming' ? ' streaming' : ''), id: `m-${m.id}`, dataset: { id: m.id } }, body);
   m.blocks.forEach((b, i) => { const be = renderBlock(b, m, ctx); if (be) { be.dataset.index = i; body.appendChild(be); } });
-  if (m.status === 'streaming') el.appendChild(h('div', { class: 'working', title: 'baabaa is writing' }, busyMark(26)));
+  if (m.status === 'streaming') el.appendChild(workingRow(m));
   el.appendChild(assistantFooter(m, ctx));
   return el;
 }
@@ -151,12 +152,19 @@ export function renderBlock(b, m, ctx) {
   }
 }
 
+// A thought. While it is being thought only its text shows (if the account wants to see it): the strand at the
+// foot of the reply says the rest. Once the next step starts it folds into its ball of yarn, a bigger ball for
+// a longer thought (thread.js).
 function renderThinking(b, m) {
-  const live = m.status === 'streaming';
-  const d = h('details', { class: 'thinking', open: (live && S.me.settings.show_thinking !== false) || null },
-    h('summary', null, icon('brain', 15), h('span', { class: 'thinking-label' }, live ? 'Thinking…' : 'Thoughts')),
+  const T = globalThis.BaabaaThread;
+  if (m.status === 'streaming' && b.ms == null && m.blocks[m.blocks.length - 1] === b) {
+    return h('details', { class: 'thinking live', open: S.me.settings.show_thinking !== false || null },
+      h('summary', null, 'Thinking…'), h('div', { class: 'thinking-text' }, b.text));
+  }
+  return h('details', { class: 'thinking' },
+    h('summary', null, T ? h('span', { class: 'ball', html: T.ballMarkup((b.text || '').length / 4) }) : icon('brain', 15),
+      h('span', { class: 'thinking-label' }, T ? T.thoughtLabel(b) : 'Thoughts')),
     h('div', { class: 'thinking-text' }, b.text));
-  return d;
 }
 
 // Tools --------------------------------------------------------------------------------------------
@@ -364,8 +372,9 @@ export function pendingCard(p, ctx) {
   const mine = !p.for_owner || S.me.role === 'owner';
   const card = h('div', { class: 'pending-card', dataset: { pending: p.id } });
   const d = p.decision || {};
+  const ask = p.tool === 'web_fetch' && site(p.args) ? `read a page from ${site(p.args)}?` : `allow this ${actionNoun(p.tool)}?`;
   card.appendChild(h('div', { class: 'pending-title' }, icon('shield', 16),
-    p.for_owner && S.me.role === 'owner' && p.account_id !== S.me.id ? `${p.account_name} asks: allow this ${actionNoun(p.tool)}?` : `Allow this ${actionNoun(p.tool)}?`));
+    p.for_owner && S.me.role === 'owner' && p.account_id !== S.me.id ? `${p.account_name} asks: ${ask}` : ask[0].toUpperCase() + ask.slice(1)));
   if (d.reason) card.appendChild(h('div', { class: 'pending-reason' }, d.danger ? '⚠ ' : '', d.reason));
   if (!mine) {
     card.appendChild(h('div', { class: 'muted' }, 'Waiting for the owner to approve.'));
@@ -386,6 +395,10 @@ export function pendingCard(p, ctx) {
   if (p.suggested_rule) card.appendChild(h('label', { class: 'pending-rule' }, h('span', { class: 'muted small' }, 'Always allow adds the rule'), ruleInput));
   card.appendChild(reason);
   return card;
+}
+
+function site(args) {
+  try { return new URL((args || {}).url).hostname; } catch { return ''; }
 }
 
 function actionNoun(tool) {

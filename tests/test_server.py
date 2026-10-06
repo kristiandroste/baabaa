@@ -81,10 +81,17 @@ class TestApi(unittest.TestCase):
         return r.status, (json.loads(data) if data and r.getheader("content-type", "").startswith("application/json") else data), r
 
     def test_flow(self):
-        status, _, _ = self.req("GET", "/api/health", host="evil.example")
+        status, _, r = self.req("GET", "/api/health", host="evil.example")
         self.assertEqual(status, 421)
-        status, d, _ = self.req("GET", "/api/me")
+        refusals = [r]
+        status, d, r = self.req("GET", "/api/me")
         self.assertEqual(status, 401)
+        refusals += [r, self.req("GET", "/api/no-such-thing")[2], self.req("PUT", "/api/health")[2]]
+        self.assertEqual([x.status for x in refusals], [421, 401, 404, 405])
+        for r in refusals:  # a refusal carries the same protections as an answer
+            self.assertEqual(r.getheader("X-Content-Type-Options"), "nosniff", r.status)
+            self.assertIn("script-src 'self'", r.getheader("Content-Security-Policy"))
+            self.assertEqual(r.getheader("Cache-Control"), "no-store")
         status, d, r = self.req("POST", "/api/setup", {"name": "owner", "display_name": "Owner"})
         self.assertEqual(status, 200)
         cookie = r.getheader("Set-Cookie").split(";")[0]

@@ -2,7 +2,7 @@
 
 Two ways of saving space, cheapest first:
 1. clearing old tool output (no model call): the oldest tool results are replaced by a short note;
-2. summarizing (a model call, in compaction.py) when clearing is not enough.
+2. summarizing (a model call, Agent.compact in loop.py) when clearing is not enough.
 The stored conversation is never changed by either; only the view sent to the model is.
 """
 

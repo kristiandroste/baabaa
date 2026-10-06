@@ -1,0 +1,52 @@
+/* baabaa's website: the landing page and the document reader. Colours and type come from the app's own
+   stylesheet (preview/css/app.css); this file only lays the pages out. */
+html, body.site { height: auto; }
+body.site { min-height: 100%; display: flex; flex-direction: column; }
+.site a { text-underline-offset: 2px; }
+.site .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
+.site .brand { display: inline-flex; align-items: center; gap: 10px; font: 600 20px/1 var(--sans); color: var(--text); text-decoration: none; }
+.site .top nav { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14.5px; }
+.site .top nav a { color: var(--text-2); text-decoration: none; }
+.site .top nav a:hover { color: var(--accent); }
+.site main { width: 100%; max-width: 60rem; margin: 0 auto; padding: 0 24px; flex: 1; }
+.site section { padding: 44px 0 8px; }
+.site h1 { font: 500 clamp(2rem, 5vw, 3rem)/1.12 var(--serif); letter-spacing: -.01em; margin: 0 0 18px; max-width: 18ch; text-wrap: balance; }
+.site h2 { font: 600 1.25rem/1.3 var(--sans); margin: 0 0 14px; }
+.site h3 { font: 600 15px/1.35 var(--sans); margin: 0 0 4px; }
+.site p, .site li { color: var(--text-2); max-width: 68ch; }
+.site .lede { font: 1.15rem/1.6 var(--serif); color: var(--text); margin: 0 0 22px; }
+.hero { padding-top: 56px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
+.site .btn { display: inline-flex; align-items: center; text-decoration: none; }
+.site .stage { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 18px; padding: 26px 24px 16px; max-width: 46rem; }
+.site .stage .th { --th-surface: var(--bg-elev); }
+.stage-label { font: 15px/1.4 var(--sans); min-height: 1.5em; margin: 10px 0 0; font-variant-numeric: tabular-nums; }
+.caption { font-size: 14px; margin-top: 12px; }
+.command { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--bg-code); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; max-width: 56rem; }
+.command code { font: 13.5px/1.5 var(--mono); overflow-wrap: anywhere; flex: 1; min-width: 0; user-select: all; }
+.needs, .links { padding-left: 1.2em; display: grid; gap: 6px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 22px 28px; }
+.grid p { margin: 0; font-size: 14.5px; }
+.site footer { border-top: 1px solid var(--border); padding: 20px 24px 28px; margin-top: 48px; font-size: 13.5px; }
+.site footer p { margin: 0 0 4px; max-width: none; }
+
+/* the document reader */
+.reader { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 0 36px; width: 100%; max-width: 72rem; margin: 0 auto; padding: 28px 24px 0; flex: 1; }
+.reader main { padding: 0; max-width: 46rem; margin: 0; }
+.toc { display: flex; flex-direction: column; gap: 2px; font-size: 14.5px; align-self: start; position: sticky; top: 16px; }
+.toc a { color: var(--text-2); text-decoration: none; padding: 6px 10px; border-radius: 8px; }
+.toc a:hover { background: var(--bg-hover); }
+.toc a.on { background: var(--bg-active); color: var(--text); font-weight: 600; }
+.toc .sep { height: 1px; background: var(--border); margin: 8px 10px; }
+.docs .md { font: 16px/1.65 var(--serif); color: var(--text); }
+.docs .md p, .docs .md li { color: var(--text); max-width: none; }
+.docs .md h1 { font: 500 2.1rem/1.15 var(--serif); max-width: none; margin: 0 0 18px; }
+.docs .md h2 { font: 600 1.3rem/1.3 var(--sans); margin: 34px 0 10px; }
+.docs .md h3 { font: 600 1.05rem/1.35 var(--sans); margin: 24px 0 6px; }
+.docs .md pre.plain { white-space: pre-wrap; font: 13px/1.55 var(--mono); }
+@media (max-width: 800px) {
+  .reader { grid-template-columns: minmax(0, 1fr); }
+  .toc { position: static; flex-direction: row; flex-wrap: wrap; margin-bottom: 18px; }
+  .toc .sep { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .site * { scroll-behavior: auto; } }

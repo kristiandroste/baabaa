@@ -18,7 +18,7 @@ export function changed(what) { for (const fn of listeners) { try { fn(what); } 
 
 // Renderers written as classic scripts; loaded for their globals. The app still works without them.
 async function loadRenderers() {
-  for (const f of ['./markdown.js', './highlight.js', './mermaid-lite.js']) {
+  for (const f of ['./markdown.js', './highlight.js', './mermaid-lite.js', './thread.js']) {
     try { await import(f); } catch (e) { console.warn('renderer missing', f); }
   }
 }

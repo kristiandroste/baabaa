@@ -97,6 +97,12 @@ MIGRATIONS = [
     );
     CREATE INDEX shares_from ON shares(from_account, created_ms);
     """,
+    # Who may connect, where nobody has chosen yet: a data folder that already has accounts dates from before the
+    # choice existed and keeps the local network; a new one starts with this computer only.
+    """
+    INSERT OR IGNORE INTO settings (key, value)
+        SELECT 'network', CASE WHEN EXISTS (SELECT 1 FROM accounts) THEN '"lan"' ELSE '"local"' END;
+    """,
 ]
 
 

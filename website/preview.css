@@ -1,0 +1,16 @@
+/* The preview's one addition to baabaa's own look: a bar that says what this is, and room for it. */
+:root { --pv: 34px; }
+.pv-bar { position: fixed; top: 0; left: 0; right: 0; height: var(--pv); z-index: 80; display: flex; align-items: center; justify-content: center;
+  gap: 6px 16px; padding: 0 12px; background: var(--accent); color: var(--on-accent); font: 13px/1.2 var(--sans); white-space: nowrap; overflow: hidden; }
+.pv-bar span { overflow: hidden; text-overflow: ellipsis; }
+.pv-bar a { color: inherit; font-weight: 600; text-underline-offset: 2px; flex: none; }
+#app { padding-top: var(--pv); }
+.layout { height: calc(100vh - var(--pv)); height: calc(100dvh - var(--pv)); }
+.boot, .boot-error { height: calc(100vh - var(--pv)); }
+.overlay, .restart-banner { top: var(--pv); }
+.restart-banner { top: calc(var(--pv) + 10px); }
+@media (max-width: 900px) {
+  .sidebar, .panel { top: var(--pv); }
+  .settings-modal { height: calc(100vh - var(--pv)); max-height: calc(100vh - var(--pv)); }
+}
+@media (max-width: 560px) { .pv-bar { font-size: 12px; gap: 6px 10px; } .pv-bar a:first-of-type { display: none; } }

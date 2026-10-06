@@ -92,9 +92,10 @@ def default_interface() -> str | None:
 
 
 def saved_mode(maindb) -> str:
-    """The owner's choice: "local" (this computer only) or "lan". Data folders from before the setting: "lan"."""
+    """The owner's choice: "local" (this computer only) or "lan". A new data folder starts as "local"; one from
+    before the choice existed was given "lan" when it was first opened (maindb.py). Anything unreadable is "local"."""
     mode = maindb.get_setting("network")
-    return mode if mode in MODES else "lan"
+    return mode if mode in MODES else "local"
 
 
 class LanGuard:

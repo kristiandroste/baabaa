@@ -543,6 +543,7 @@ class TestUpdateApi(unittest.TestCase):
         def run():
             asyncio.set_event_loop(cls.loop)
             cls.app = App()
+            cls.app.maindb.set_setting("network", "lan")  # an owner who opened baabaa to the network
             web = Web(cls.app, LanGuard(bind=["127.0.0.1"], networks=[]), tls=False, port=0, setup_token="tok")
             s = cls.loop.run_until_complete(Server(web).listen_tcp("127.0.0.1", 0))
             cls.port = s.sockets[0].getsockname()[1]

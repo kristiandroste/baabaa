@@ -21,4 +21,4 @@ AGPL-3.0.
 ## Security problems
 
 Please report them privately, through "Report a vulnerability" on the repository's Security tab, not in a
-public issue.
+public issue. [SECURITY.md](SECURITY.md) says what baabaa protects and where its limits are.

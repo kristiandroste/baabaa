@@ -31,8 +31,9 @@ All bodies are JSON. Errors are `{"error": "…"}` with a 4xx or 5xx status.
 | `GET /api/search` | `q` | `{results}` |
 | `POST /api/pending/{id}` | approval `{decision: allow_once|allow_always|deny, rule?, reason?}`; question `{text}`; plan `{decision: approve|revise, mode?, text?}` | |
 
-A message's `blocks` are `text`, `thinking`, `tool` (name, args, status, output, decision, judge, diff),
-`attachment`, `notice` and `error`. A reply is one assistant message holding the whole turn.
+A message's `blocks` are `text`, `thinking` (with `ms`, how long the thought took, once it has ended), `tool`
+(name, args, status, output, decision, judge, diff), `attachment`, `notice` and `error`. A reply is one assistant
+message holding the whole turn.
 
 `research: true` (or a message starting with `/research `) answers from the web: the reply's blocks show
 each step (`research_plan`, `web_search`, `web_fetch`, `research_notes`) and end with the cited report.
@@ -82,8 +83,9 @@ each message). Conversations join a project with `project_id` on creation or `PA
 
 `GET /api/events` is a Server-Sent Events stream for the account. Event names: `msg.new`, `msg.delta`
 (`{msg_id, index, text, len}`: append `text` to block `index`; `len` is the block's length afterwards),
-`msg.block`, `msg.done`, `turn` (running, waiting, idle; queue position), `pending` and `pending.done`
-(approvals, questions, plans), `context`, `todos`, `artifact`, `tool.output` (live command output),
+`msg.block`, `msg.done`, `turn` (running, waiting, idle; `queue_position`, sent again whenever the reply's place
+in the GPU queue changes), `pending` and `pending.done`
+(approvals, questions, plans), `context`, `todos`, `artifact`, `tool.output` (live command output), `rules`,
 `conv`, `conv.reload`, `conv.deleted`, `queue` (the GPU queue), `job` (installs, fit tests, model
 searches), `models.updated`, `notice`, `project` and `project.file` (documents and their indexing
 progress: `done` of `total` chunks), `memory`, `schedule`, `share`, `image.progress` (`{msg_id, index,

@@ -125,7 +125,8 @@ async def run(agent, turn, store, model: str, caps: list, blocks: list, question
         rankings.append(res)
         done(b, "\n\n".join(f"{i}. {r['title']}\n   {r['url']}" for i, r in enumerate(res, 1)) or "[no results]")
 
-    # 3. choose, honouring the account's WebFetch rules
+    # 3. choose, honouring the account's WebFetch deny rules. Asking does not apply here: the addresses come
+    #    from the search, not from the model, and the user asked for the research.
     sources = []
     for r in pick_sources(rankings, MAX_SOURCES * 2):
         d = permissions.decide("web_fetch", "net", {"url": r["url"]}, ctx)

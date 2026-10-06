@@ -1,6 +1,6 @@
-"""baabaa: a self-hosted, LAN-only assistant and coding agent on local Ollama models."""
+"""baabaa: a self-hosted assistant and coding agent on local Ollama models, for one computer or its local network."""
 
-__version__ = "0.9.2"
+__version__ = "0.9.3"
 NAME = "baabaa"
 
 # How baabaa starts a copy of itself (with a clean environment, for a restart, to check a new version):

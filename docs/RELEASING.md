@@ -45,8 +45,8 @@ openssl pkey -in ~/.config/baabaa-release/signing-key.pem -pubout -outform DER |
 `~/.config/baabaa-release/private-words.txt` lists what must never be published: names, addresses, this
 machine's user and host names, private folders, other projects. One regular expression per line, matched
 regardless of case. `tools/release.py check` searches every file git would publish and the whole git history
-(authors, committers, messages and every change in every commit) for them, and `build` and `publish` refuse while anything matches. Commits use
-the GitHub no-reply address (`git config user.email`), never a personal one.
+(authors, committers, messages and every change in every commit) for them, and `build` and `publish` refuse
+while anything matches. Commits use the GitHub no-reply address (`git config user.email`), never a personal one.
 
 ## Making a release
 
@@ -68,3 +68,24 @@ installed it keep it until the next release; nothing new installs it.
 `latest` gets every release that is not pulled. `stable` gets a release once it has been out for 7 days, or
 at once when it was published with `--stable`. The installer falls back to the newest release when stable has
 none yet. An install's channel is in `~/.local/lib/baabaa/update.json` and in **Settings → About**.
+
+## The website
+
+`python3 tools/website.py build` makes the site in `dist/site`: the landing page, the documents (the Markdown
+files of this repository, shown by a small reader) and the preview. `python3 tools/website.py serve` builds it
+and serves it at `http://127.0.0.1:8900/` on this computer only, to look at.
+
+The preview is the interface in `baabaa/web/`, unchanged, with `website/preview.js` standing in for the
+server. Its data is recorded at build time: the real server runs in the build's own process, on 127.0.0.1,
+against the tests' stand-in for Ollama, and plays the conversations written in `website/script.py`; the
+commands in them really run, in the sandbox, in a sample project. Nothing in the preview runs a model, and
+the page says so.
+
+The build refuses to finish if the result names the machine it ran on: its home folder, host name, user
+name, a network address, the build's own folder, or a private word. The GPU in the preview is a stand-in,
+and folders are renamed to `/home/guest/…`.
+
+Publishing is the workflow **website** (`.github/workflows/website.yml`), started by hand from the
+repository's Actions tab once GitHub Pages is turned on (Settings → Pages → Source: GitHub Actions; a custom
+domain is set on the same page). It builds on GitHub's machine and publishes the result. Nothing publishes
+the site by itself.

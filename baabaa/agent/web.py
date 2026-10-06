@@ -1,8 +1,11 @@
 """web_fetch and web_search for the agent. They run in the server, so they refuse private and local
-addresses (no reaching the router, other LAN devices, Ollama or baabaa itself)."""
+addresses (no reaching the router, other LAN devices, Ollama or baabaa itself). A name is resolved once for
+each connection and the connection goes to the very addresses that were checked, so a name server cannot give
+a public address for the check and a local one for the request."""
 
 import asyncio
 import html
+import http.client
 import ipaddress
 import re
 import socket
@@ -20,15 +23,57 @@ class FetchError(Exception):
     pass
 
 
-def _check_host(host: str) -> None:
+def _vetted(host: str, port: int | None = None) -> list:
+    """The addresses `host` resolves to, none of them private or local (else FetchError)."""
     try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror as exc:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError) as exc:
         raise FetchError(f"cannot resolve {host}") from exc
     for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
+        ip = ipaddress.ip_address(info[4][0].split("%")[0])
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
             raise FetchError(f"{host} resolves to a private or local address; baabaa does not fetch those")
+    return infos
+
+
+def _check_host(host: str) -> None:
+    _vetted(host)
+
+
+def _connect(host: str, port: int, timeout) -> socket.socket:
+    """A connection to one of the addresses that were just checked."""
+    last = None
+    for family, kind, proto, _, address in _vetted(host, port):
+        sock = socket.socket(family, kind, proto)
+        try:
+            if isinstance(timeout, (int, float)):
+                sock.settimeout(timeout)
+            sock.connect(address)
+            return sock
+        except OSError as exc:
+            last = exc
+            sock.close()
+    raise last or OSError(f"could not connect to {host}")
+
+
+class _Public(http.client.HTTPConnection):
+    def connect(self):
+        self.sock = _connect(self.host, self.port, self.timeout)
+
+
+class _PublicTLS(http.client.HTTPSConnection):
+    def connect(self):
+        self.sock = self._context.wrap_socket(_connect(self.host, self.port, self.timeout), server_hostname=self.host)
+
+
+class _PublicHTTP(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_Public, req)
+
+
+class _PublicHTTPS(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_PublicTLS, req, context=self._context)
 
 
 class _NoPrivateRedirects(urllib.request.HTTPRedirectHandler):
@@ -37,16 +82,22 @@ class _NoPrivateRedirects(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def public_opener():
+    """Opens http(s) addresses on the public internet only: no proxy, and every connection, a redirect's too,
+    goes to addresses that were checked."""
+    from ..util import ssl_context
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoPrivateRedirects(), _PublicHTTP(),
+                                       _PublicHTTPS(context=ssl_context()))
+
+
 def _get(url: str, data: bytes | None = None, timeout: float = 20.0) -> tuple[bytes, str, str]:
     parts = urllib.parse.urlsplit(url)
     if parts.scheme not in ("http", "https"):
         raise FetchError("only http and https URLs")
     _check_host(parts.hostname or "")
-    from ..util import ssl_context
-    opener = urllib.request.build_opener(_NoPrivateRedirects(), urllib.request.HTTPSHandler(context=ssl_context()))
     req = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT, "Accept-Language": "en"})
     try:
-        with opener.open(req, timeout=timeout) as resp:
+        with public_opener().open(req, timeout=timeout) as resp:
             body = resp.read(MAX_BYTES)
             return body, resp.headers.get("Content-Type", ""), resp.geturl()
     except urllib.error.HTTPError as exc:

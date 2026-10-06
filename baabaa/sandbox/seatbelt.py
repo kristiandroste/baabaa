@@ -11,7 +11,7 @@ opens the given folders after (Bazel's macOS sandbox relies on the same order). 
 kernel sees them: /tmp is /private/tmp, and on a case-insensitive disk the case must be the disk's, which
 `canonical` asks the kernel for (F_GETPATH). Paths reach the profile as parameters (-D), never pasted into it.
 
-Not yet run on a Mac (written 2026-10-02): `baabaa doctor --sandbox` checks every promise on the machine.
+Checked on macOS 15 (2026-10-05, by the tests on GitHub): `baabaa doctor --sandbox` checks every promise on a machine.
 """
 
 import os

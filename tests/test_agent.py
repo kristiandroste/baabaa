@@ -189,6 +189,45 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
         finally:
             web.search, web.fetch = old_search, old_fetch
 
+    async def test_web_pages_ask_in_a_folder(self):
+        from baabaa.agent import web
+
+        async def fake_fetch(url, max_chars=20000):
+            return {"url": url, "title": "Docs", "content": "Shear in spring. " * 20, "truncated": False}
+        old_fetch, web.fetch = web.fetch, fake_fetch
+        try:
+            folder = os.path.join(self.tmp.name, "farm")
+            os.makedirs(folder)
+            conv = self.store.create_conversation(model=CHAT_MODEL, mode="manual", folder=folder)
+            page = {"name": "web_fetch", "arguments": {"url": "https://docs.example/shearing"}}
+            self.ollama.script([{"tool_calls": [page]}, {"tool_calls": [page]}, {"content": "Shear in spring."}])
+            await self.app.agent.send(self.account, conv["id"], "When do I shear? Check docs.example.", [], "test")
+            turn = self.app.agent.turns[conv["id"]]
+            for _ in range(200):           # the first page asks
+                if self.app.agent.pending:
+                    break
+                await asyncio.sleep(0.02)
+            ask = next(iter(self.app.agent.pending.values()))["payload"]
+            self.assertEqual((ask["kind"], ask["tool"], ask["suggested_rule"]), ("approval", "web_fetch", "WebFetch(domain:docs.example)"))
+            self.assertIn("asks first while working in a folder", ask["decision"]["reason"])
+            self.app.agent.resolve(ask["id"], self.account, {"decision": "allow_always", "rule": ask["suggested_rule"]})
+            await asyncio.wait_for(turn.task, 20)
+            msg = self.store.message(self.store.conversation(conv["id"])["leaf_id"])
+            reads = [b for b in msg["blocks"] if b.get("name") == "web_fetch"]
+            self.assertEqual([b["status"] for b in reads], ["done", "done"])
+            self.assertEqual([(b["decision"]["action"], b["decision"]["layer"]) for b in reads],
+                             [("ask", "mode"), ("allow", "rule")])   # the second one needed no one
+            self.assertIn({"kind": "allow", "pattern": "WebFetch(domain:docs.example)"},
+                          [{"kind": r["kind"], "pattern": r["pattern"]} for r in self.store.rules()])
+            # a chat without a folder reads pages without asking
+            chat = self.store.create_conversation(model=CHAT_MODEL)
+            msg, _ = await self.turn(chat["id"], "What does docs.example say?",
+                                     [{"tool_calls": [{"name": "web_fetch", "arguments": {"url": "https://other.example/"}}]}, {"content": "Spring."}])
+            read = [b for b in msg["blocks"] if b.get("name") == "web_fetch"][0]
+            self.assertEqual((read["status"], read["decision"]["layer"]), ("done", "safe"))
+        finally:
+            web.fetch = old_fetch
+
     async def test_scheduled_task(self):
         from baabaa.scheduler import next_run, validate
         from baabaa.util import now_ms
@@ -528,6 +567,49 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
         conv = self.store.create_conversation(model=CHAT_MODEL)
         _, chats = await self.turn(conv["id"], "Hello", [{"content": "Hi."}])
         self.assertIn("Likes tea.", chats[0]["messages"][0]["content"])
+
+    async def test_what_the_thread_is_told(self):
+        """The thread under a reply (web/js/thread.js, tui/thread.py) shows how long a thought took and how
+        many replies are ahead in the GPU queue: both come from here."""
+        sub = self.app.events.subscribe(self.account["id"], True, "test")
+
+        def events():
+            out = []
+            while not sub.queue.empty():
+                out.append(sub.queue.get_nowait())
+            return out
+
+        conv = self.store.create_conversation(model=CHAT_MODEL)
+        self.ollama.delay = 0.06
+        msg, _ = await self.turn(conv["id"], "Why is the sky blue?", [
+            {"thinking": "Scattering. Keep it short.", "content": "Sunlight scatters in the air."}])
+        thought = msg["blocks"][0]
+        self.assertEqual(thought["type"], "thinking")
+        self.assertTrue(40 <= thought["ms"] < 5000, thought)   # from its first word to the answer's first word
+        told = [(e["data"]["index"], e["data"]["block"]["type"]) for e in events() if e["type"] == "msg.block"]
+        # the thought's start, its end (timed) and only then the answer's block, so the thought folds first
+        self.assertEqual(told, [(0, "thinking"), (0, "thinking"), (1, "text")])
+
+        # a thought the reply ends on, or is stopped in, is timed too
+        msg, _ = await self.turn(conv["id"], "And at night?", [{"thinking": "No sunlight to scatter."}, {"content": "It is dark."}])
+        self.assertTrue(all("ms" in b for b in msg["blocks"] if b["type"] == "thinking"), msg["blocks"])
+
+        # a reply that waits for the GPU tells its windows its place, and again when its turn comes
+        other = self.store.create_conversation(model=CHAT_MODEL)
+        events()
+        self.ollama.delay = 0.15
+        self.ollama.script([{"content": "one two three four five six seven eight"}, {"content": "after you"}])
+        await self.app.agent.send(self.account, conv["id"], "first", [], "test")
+        for _ in range(200):
+            if self.app.gateway.queue.holder is not None:
+                break
+            await asyncio.sleep(0.01)
+        await self.app.agent.send(self.account, other["id"], "second", [], "test")
+        await asyncio.wait_for(asyncio.gather(*[t.task for t in list(self.app.agent.turns.values())]), 30)
+        places = [e["data"].get("queue_position") for e in events() if e["type"] == "turn" and e["data"]["conv_id"] == other["id"]]
+        self.assertIn(1, places)
+        self.assertIsNone(places[places.index(1) + 1])
+        self.assertEqual(self.store.message(self.store.conversation(other["id"])["leaf_id"])["status"], "ok")
 
 
 if __name__ == "__main__":

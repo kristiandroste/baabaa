@@ -514,9 +514,9 @@
         var em = emphasis(s, i, opts, depth);
         if (em) { flush(); out += em.html; i = em.end; continue; }
       }
-      if (c === '\n') {
+      if (c === '\n') {             // a line end is a line break, as in a chat; a document wrapped to a width says breaks: false
         flush();
-        out += '<br>';
+        out += opts.breaks === false ? '\n' : '<br>';
         i++;
         continue;
       }

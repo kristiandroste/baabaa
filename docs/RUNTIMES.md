@@ -278,8 +278,7 @@ The microphone button records in the browser (16 kHz mono WAV, captured with an 
 browser's own speech recognition is not used because some browsers send audio to a cloud service) and
 `POST /api/transcribe` has an approved model that hears audio (for example `gemma4:e2b-it-qat`) write
 down the words, through the same queue and checks, as a turn with audio (see "Ollama models with images or
-audio"). The audio is not stored. The owner can pick the model with the `stt_model` setting; otherwise the
-smallest approved audio model is used.
+audio"). The audio is not stored. The smallest approved model that hears audio is used.
 
 Measured with gemma4:e2b-it-qat (2026-09-30): eight spoken test clips transcribed correctly (a noise clip
 gave empty text), about 0.1 s each once loaded; the first clip 16 s including the load. Its server holds

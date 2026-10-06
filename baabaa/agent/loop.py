@@ -45,9 +45,6 @@ RECOVERY = {
         "rewrite_artifact; for a file: write_file or edit_file), or tell the user plainly that it is not done. If you "
         "meant work from an earlier reply, say exactly what was done then and what was not."),
 }
-# Tools whose success means something was made or changed in this turn (see _unfinished)
-CHANGE_TOOLS = {"create_artifact", "update_artifact", "rewrite_artifact", "write_file", "edit_file", "create_file",
-                "bash", "generate_image", "memory", "todo_write"}
 
 
 class HookBlocked(Exception):
@@ -68,6 +65,7 @@ class Turn:
         self.checkpointed = False
         self.started = mono_ms()
         self.blocks: list[dict] = []
+        self.queue_position: int | None = None   # its place in the GPU queue, as last told to its windows
         # knowledge for this turn (set by Agent._prepare_knowledge)
         self.project: dict | None = None
         self.project_prompt = ""
@@ -96,8 +94,14 @@ class Agent:
 
     def _turn_state(self, turn: Turn) -> None:
         data = turn.public()
-        data["queue_position"] = self.app.gateway.queue.position(turn.conv_id)
+        data["queue_position"] = turn.queue_position = self.app.gateway.queue.position(turn.conv_id)
         self._pub(turn.account["id"], "turn", data)
+
+    def queue_moved(self) -> None:
+        """The GPU queue changed: every turn whose place in it moved tells its windows."""
+        for turn in list(self.turns.values()):
+            if self.app.gateway.queue.position(turn.conv_id) != turn.queue_position:
+                self._turn_state(turn)
 
     def live_blocks(self, conv_id: str) -> tuple[str | None, list]:
         """The running turn's assistant message id and its blocks so far (for a window that just opened)."""
@@ -337,6 +341,7 @@ class Agent:
                 nudge = None
             think = self._think(conv, caps)
             text_block = think_block = None
+            think_t0 = 0.0
             calls, final = [], {}
             try:
                 async for chunk in gateway.chat(model=model, messages=messages, tools=schemas or None, think=think,
@@ -346,10 +351,13 @@ class Agent:
                     if msg.get("thinking"):
                         if think_block is None:
                             think_block = {"type": "thinking", "text": ""}
+                            think_t0 = mono_ms()
                             blocks.append(think_block)
                             self._block(turn, blocks, think_block)
                         think_block["text"] += msg["thinking"]
                         self._delta(turn, blocks, think_block, msg["thinking"])
+                    if msg.get("content") or msg.get("tool_calls"):
+                        self._thought_over(turn, blocks, think_block, think_t0)  # the answer or an action begins
                     if msg.get("content"):
                         if text_block is None:
                             text_block = {"type": "text", "text": ""}
@@ -375,6 +383,8 @@ class Agent:
                 unreadable += 1
                 nudge = self._recovery(turn, blocks, model, "parse_error", error=clip(str(exc), 200))
                 continue
+            finally:
+                self._thought_over(turn, blocks, think_block, think_t0)  # however the reply ended
             self._flush(turn, blocks)
             self._account_tokens(turn, store, messages, schemas, final, meta, num_ctx)
             if final.get("done_reason") == "length":
@@ -607,6 +617,12 @@ class Agent:
         self._flush(turn, blocks)
         self._pub(turn.account["id"], "msg.block", {"conv_id": turn.conv_id, "msg_id": turn.assistant_id,
                                                     "index": blocks.index(block), "block": block})
+
+    def _thought_over(self, turn, blocks, block, t0: float) -> None:
+        """A thought has ended: note how long it took (`ms`), which the windows show beside it."""
+        if block is not None and "ms" not in block:
+            block["ms"] = round(mono_ms() - t0)
+            self._block(turn, blocks, block)
 
     def _delta(self, turn, blocks, block, text) -> None:
         key = turn.assistant_id
