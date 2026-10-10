@@ -117,6 +117,25 @@ class TestNetworkMode(unittest.TestCase):
                 run("stop")
                 ollama.stop()
 
+    def test_help_command(self):
+        with tempfile.TemporaryDirectory() as d:
+            env = {k: v for k, v in os.environ.items() if k not in ("BAABAA_HOME", "PYTHONPATH")}
+            env.update(BAABAA_PYTHON=sys.executable, BAABAA_HOME=d)
+            run = lambda *a: subprocess.run([str(ROOT / "bin" / "baabaa"), *a], env=env, cwd="/",  # noqa: E731
+                                            capture_output=True, text=True, timeout=60)
+            r = run("help")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            for line in ("baabaa start", "baabaa network", "baabaa account add NAME", "baabaa models test NAME",
+                         "baabaa update [--check]", "baabaa help COMMAND"):
+                self.assertIn(line, r.stdout)
+            r = run("help", "models")
+            self.assertEqual(r.returncode, 0)
+            self.assertIn("add-llamacpp", r.stdout)
+            r = run("help", "nothing")
+            self.assertEqual(r.returncode, 2)
+            self.assertIn("no command named 'nothing'", r.stdout)
+            self.assertIn("baabaa help", run("--help").stdout)
+
     def test_network_command(self):
         with tempfile.TemporaryDirectory() as d:
             env = {k: v for k, v in os.environ.items() if k not in ("BAABAA_HOME", "PYTHONPATH")}

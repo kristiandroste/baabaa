@@ -121,7 +121,7 @@ def _startup_lines(log: Path) -> list[str]:
     except OSError:
         return []
     for i, line in enumerate(lines):
-        if line.startswith("baabaa is running"):
+        if line.startswith("baabaa") and " is running " in line:  # "baabaa 1.2.3 is running on ..."
             out = [line]
             for more in lines[i + 1:]:
                 if not more.startswith(" "):

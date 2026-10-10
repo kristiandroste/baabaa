@@ -243,6 +243,7 @@ conversations, files and settings, and uses only the folders you grant it.
 baabaa status      # is it running, where to open it, what the GPU is doing
 baabaa update      # install the newest release
 baabaa stop        # stop it; baabaa start starts it again
+baabaa help        # a guide to every command
 ```
 
 baabaa checks once a day whether a new release exists and shows a notice in the sidebar, with an **Install**

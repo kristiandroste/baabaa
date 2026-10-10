@@ -3,6 +3,11 @@
 The notes for each release. `baabaa update` and the browser's update notice show them before an update,
 and every account sees the newest section once afterwards.
 
+## 0.9.5 - 2026-10-10
+
+- `baabaa help` prints a guide to the commands, and `baabaa help COMMAND` the details of one. `baabaa version`
+  prints the version, and the server says which version it is when it starts.
+
 ## 0.9.4 - 2026-10-10
 
 - On the network, baabaa has names: phones and computers there open it as `baabaa.local:8443` or `ai.local:8443`,

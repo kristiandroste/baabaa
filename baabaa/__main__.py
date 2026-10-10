@@ -14,7 +14,8 @@
   baabaa uninstall [--purge]             remove the program (--purge: also its data; never Ollama or models)
   baabaa autostart on|off|status         start baabaa with the computer
   baabaa network [local|lan]             this computer only, or the local network too
-  baabaa --version
+  baabaa help [COMMAND]                  a guide to these commands, or the details of one
+  baabaa version
 """
 
 import argparse
@@ -26,6 +27,47 @@ import signal
 import sys
 
 KEEP_ENV = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "TZ", "TERM", "SHELL", "PYTHONPATH", "PYTHONUNBUFFERED")
+
+GUIDE = """baabaa: a self-hosted assistant and coding agent on your own GPU.
+
+Every day
+  baabaa                          the terminal chat (the server must be running); baabaa chat --account NAME for another account
+  baabaa start                    run the server in the background, then open https://localhost:8443 (or the address it prints)
+  baabaa status                   whether it is running, where, and what it is doing
+  baabaa stop | restart           stop it, or start it again with the same options
+  baabaa serve                    run the server in this terminal instead (Ctrl+C stops it)
+
+Phones and other computers
+  baabaa network                  who may connect: this computer only, or your network too (then type baabaa.local:8443)
+  baabaa network lan | local      change it; the server restarts once its running replies are done
+  Install baabaa's certificate once on each device: the steps are in Settings > About, and in the tutorial.
+
+Accounts
+  baabaa account add NAME [--owner] [--password]
+  baabaa account list | passwd NAME | remove NAME
+  baabaa account grant NAME PATH [--ro] | revoke NAME PATH     the folders a member may work in
+  baabaa account owner NAME | user NAME                        change an account's role
+
+Models
+  baabaa models list | sync       the models Ollama has, and whether each fits the GPU (sync reads Ollama's list again)
+  baabaa models test NAME         try a model on the GPU; approve NAME | unapprove NAME lets accounts use it, or not
+  baabaa models add-llamacpp ... | add-sdcpp ... | remove NAME     model programs beyond Ollama (baabaa help models)
+
+Keeping it running
+  baabaa update [--check]         get the newest release, or only say whether there is one (installed copies)
+  baabaa autostart on | off | status      start baabaa with the computer
+  baabaa gpu status | pause | resume      let another program have the GPU for a while
+  baabaa doctor [--sandbox]       check this machine, and the sandbox that commands run in
+  baabaa stats summary | export TABLE [--format csv|jsonl] [--days N] [--out FILE]
+
+Installing
+  baabaa install [stable|latest|VERSION]    install this copy, or a release
+  baabaa uninstall [--purge]      remove the program; --purge also deletes its data (never Ollama or its models)
+
+Every command takes --data FOLDER (default ~/.local/share/baabaa, or $BAABAA_HOME). baabaa version prints the version.
+The details of one command: baabaa help COMMAND. Documents: https://baabaa.kdro.ai/docs/ (the tutorial, the reference,
+the developer guide); on this computer, the docs folder of the program.
+"""
 
 
 def _clean_env_reexec() -> None:
@@ -41,7 +83,8 @@ def _clean_env_reexec() -> None:
 
 
 def main(argv=None) -> None:
-    ap = argparse.ArgumentParser(prog="baabaa", description="A self-hosted assistant and coding agent on local Ollama models.")
+    ap = argparse.ArgumentParser(prog="baabaa", description="A self-hosted assistant and coding agent on local Ollama models.",
+                                 epilog="baabaa help prints a guide to these commands.")
     ap.add_argument("--data", help="data folder (default: $BAABAA_HOME or ~/.local/share/baabaa)")
     ap.add_argument("-v", "--version", action="store_true", help="print the version")
     sub = ap.add_subparsers(dest="cmd")
@@ -127,9 +170,14 @@ def main(argv=None) -> None:
     sub.add_parser("selfcheck", help=argparse.SUPPRESS)
     nw = sub.add_parser("network", help="who can connect: this computer only (local) or the local network too (lan)")
     nw.add_argument("mode", nargs="?", choices=["local", "lan"])
+    hp = sub.add_parser("help", help="a guide to these commands, or the details of one")
+    hp.add_argument("command", nargs="?")
+    sub.add_parser("version", help="print the version")
 
     args = ap.parse_args(argv)
-    if args.version:
+    if args.cmd == "help":
+        sys.exit(help_cmd(args.command, sub.choices))
+    if args.version or args.cmd == "version":
         from . import __version__, update
         print(f"baabaa {__version__}" + {"git": " (git checkout)", "folder": " (from a folder)"}.get(update.kind(), ""))
         return
@@ -168,6 +216,20 @@ def main(argv=None) -> None:
                  if cmd != "selfcheck" else installer.selfcheck_cmd())
 
 
+def help_cmd(command: str | None, parsers: dict) -> int:
+    """`baabaa help`: the guide; `baabaa help COMMAND`: that command's options."""
+    if not command:
+        print(GUIDE, end="")
+        return 0
+    parser = parsers.get(command)
+    if parser is None or command in ("help", "version", "selfcheck"):
+        print(f"baabaa: no command named {command!r}. The commands:\n")
+        print(GUIDE, end="")
+        return 2
+    parser.print_help()
+    return 0
+
+
 def _serve_argv(args) -> list[str]:
     """`start`'s options as `serve` arguments, for the background server (and `restart`)."""
     out = ["--port", str(args.port)]
@@ -198,6 +260,7 @@ def _port_in_use(hosts, port: int) -> str | None:
 
 async def serve(args) -> None:
     import shutil
+    from . import __version__
     from .app import App
     from .daemon import hold_lock
     from .paths import Paths
@@ -272,10 +335,10 @@ async def serve(args) -> None:
         raise
     urls = guard.urls(args.port, ctx is not None)
     if local:
-        print(f"baabaa is running on this computer only: {urls[0]}", flush=True)
+        print(f"baabaa {__version__} is running on this computer only: {urls[0]}", flush=True)
         print("  Other devices cannot connect. To let them: baabaa network lan", flush=True)
     else:
-        print(f"baabaa is running on the local network: {urls[0]}", flush=True)
+        print(f"baabaa {__version__} is running on the local network: {urls[0]}", flush=True)
         for u in urls[1:]:
             print(f"                                        {u}", flush=True)
         if web.addresses():

@@ -98,6 +98,8 @@ baabaa status        # is it running, where to open it, what the GPU is doing, u
 baabaa stop          # stops it, with its model servers; `baabaa restart` starts it again, same options
 baabaa autostart on  # start it with the computer (systemd on Linux, launchd on macOS); `off` undoes it
 baabaa network       # who can connect: this computer only, or other devices too
+baabaa help          # a guide to every command; `baabaa help COMMAND` explains one
+baabaa version       # which version this is
 ```
 
 `baabaa start` keeps running after the terminal that started it closes; its output goes to
