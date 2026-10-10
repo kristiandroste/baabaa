@@ -196,13 +196,40 @@ So far only this computer can reach baabaa. To use it from other devices on your
 
    baabaa restarts by itself, or tells you to run `baabaa restart`. The same choice is in **Settings → About →
    Network**.
-3. Find the address with `baabaa status`. It now starts with `https://` and contains this computer's
-   address on your network, for example `https://192.168.1.20:8443/`.
-4. On each device, install baabaa's certificate once: open that address followed by `ca.crt`
-   (`https://192.168.1.20:8443/ca.crt`) and install the file as a trusted certificate. Without it the browser
-   warns about the connection and refuses the microphone. On a phone, the setting is found by searching the
-   settings for "certificate".
-5. Open the address and sign in.
+3. On the other device, type `baabaa.local:8443` or `ai.local:8443` in the browser (Linux for now; on a Mac,
+   the Mac's own name, such as `my-mac.local:8443`). `baabaa status` lists the other addresses, such as this
+   computer's address on your network (`https://192.168.1.20:8443/`), for a device that does not know `.local`
+   names.
+4. On each device, install baabaa's certificate once. Without it the browser warns about the connection and
+   refuses the microphone. The steps for each kind of device are below; they are also in **Settings → About**.
+5. Open the address and sign in. Phones offer to add it to the home screen, after which it opens like an app.
+
+### Installing the certificate
+
+The certificate is at `http://baabaa.local:8443/ca.crt`: plain `http`, on purpose, so that the device gets it
+without a warning before it trusts baabaa.
+
+- **iPhone or iPad** (iOS 17 and 18): open that address in **Safari**, even if you use another browser; only Safari
+  can install certificates, and every browser on the device then trusts it. Allow the configuration profile.
+  Then, within 8 minutes (iOS deletes the download after that): **Settings → General → VPN & Device
+  Management** → the baabaa profile → **Install** (a *Profile Downloaded* row at the top of Settings leads to the
+  same place). Then **Settings → General → About → Certificate Trust Settings**: switch on *baabaa local CA*.
+  Without that last switch the warning stays.
+- **Android** (14 and 15): download the file, then **Settings**, search for *CA certificate* (under Security →
+  Encryption & credentials → Install a certificate), choose **CA certificate**, accept the warning and pick the
+  downloaded file. Chrome trusts it at once; Firefox keeps its own list and needs its own setting.
+- **Mac**: open the file; Keychain Access adds it. Double-click it there, open **Trust** and set *When using this
+  certificate* to **Always Trust**. Safari and Chrome trust it; Firefox asks on its own when it opens the file.
+- **Windows**: open the file → **Install Certificate** → *Current User* → *Place all certificates in the following
+  store* → **Trusted Root Certification Authorities**, and accept the warning. Chrome and Edge trust it; Firefox
+  asks on its own when it opens the file.
+- **Linux**: Firefox asks on its own when it opens the file. Chrome and Chromium read their own list:
+  `certutil -d sql:$HOME/.pki/nssdb -A -t C -n baabaa -i ca.crt` (the `certutil` command comes with
+  `libnss3-tools` on Debian and Ubuntu). For the rest of the system: `sudo cp ca.crt
+  /usr/local/share/ca-certificates/baabaa.crt && sudo update-ca-certificates`.
+
+The names and menus are those of the versions given; older ones differ slightly. Remove the certificate the
+same way when you stop using baabaa.
 
 baabaa accepts only devices on the same network as this computer. It is not reachable from the internet, and
 it should not be put there.
@@ -243,7 +270,7 @@ baabaa doctor
 | The thread sags and nothing arrives for a long time | The model is loading, or writing a long action that only shows when it is complete. | Wait a little. **Esc** stops it; a smaller model answers sooner. |
 | **Stopped: the model kept repeating an action that fails.** | The model is too small for the task. | Rephrase in smaller steps, or switch to a larger model. |
 | A command shows **Failed**, `exit 126` | The sandbox is not available, so baabaa refused to run the command. | `baabaa doctor --sandbox` says what is missing (on Linux, a kernel older than 5.13). |
-| The browser warns about the certificate on another device | The device does not know baabaa's certificate. | Section 8, step 4. |
+| The browser warns about the certificate on another device | The device does not know baabaa's certificate. | Section 8, "Installing the certificate". |
 
 ## Where to go from here
 

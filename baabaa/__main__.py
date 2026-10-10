@@ -53,7 +53,7 @@ def main(argv=None) -> None:
         s.add_argument("--http", action="store_true", help="plain HTTP (no microphone or app install in browsers)")
         s.add_argument("--bind", action="append", help="address to listen on (repeatable; default: loopback + LAN)")
         s.add_argument("--allow", action="append", help="client network in CIDR form, in place of this computer's own subnet (repeatable)")
-        s.add_argument("--name", action="append", help="extra host name clients may use (repeatable)")
+        s.add_argument("--name", action="append", help="extra host name clients may use (repeatable; one ending in .local is announced on the network too)")
         s.add_argument("--ca-port", type=int, default=0, help="plain-HTTP port that serves only the CA certificate")
         s.add_argument("--ollama", help="Ollama URL (default http://127.0.0.1:11434)")
     sub.add_parser("stop", help="stop the server")
@@ -207,19 +207,41 @@ async def serve(args) -> None:
     from .server import tls
 
     lock = hold_lock(Paths().root)  # one server per data folder; released when this process ends
+    names = None
     try:
         from .maindb import MainDB
+        from .server import mdns
         from .server.lan import saved_mode
+        maindb = MainDB(Paths().main_db)
         # this computer only, or the local network too (the owner's setting); --bind chooses addresses itself
-        local = saved_mode(MainDB(Paths().main_db)) == "local" and not args.bind
+        local = saved_mode(maindb) == "local" and not args.bind
         guard = LanGuard(bind=args.bind, networks=args.allow, names=args.name, local_only=local)
         busy = _port_in_use(guard.bind, args.port)
         if busy:
             print(f"baabaa: port {args.port} is already in use on {busy}, by another program or a baabaa with another "
                   f"data folder. Choose another port with --port.", flush=True)
             sys.exit(1)
+        claiming = None
+        # the address on the network, unless --bind chose others: where the name points
+        lan_ip = guard.primary_ip if (not local and guard.primary_ip in guard.bind
+                                      and not guard.primary_ip.startswith("127.")) else None
+        if args.bind and not local and not lan_ip and mdns.SUPPORTED:
+            print("  Names on the network are off: --bind chose addresses other than this computer's network address.",
+                  flush=True)
+        if lan_ip:
+            # the names on the network (baabaa.local, ai.local, and any --name ending in .local): claimed while
+            # the app starts, before the certificate is made
+            try:
+                wanted = mdns.clean_names(mdns.DEFAULT + [n for n in args.name or [] if n.lower().endswith(".local")])
+            except ValueError as exc:
+                print(f"baabaa: {exc}", flush=True)
+                sys.exit(1)
+            names = mdns.Responder(lan_ip, accept=guard.allowed_client, log=lambda t: print(f"  {t}", flush=True))
+            claiming = asyncio.ensure_future(names.start(wanted))
         app = App(ollama_url=args.ollama)
         await app.startup()
+        if claiming is not None:
+            guard.add_local_names(await claiming)
         ctx = None
         if not args.http and not local:  # on this computer only, plain HTTP: browsers treat localhost as secure
             try:
@@ -232,13 +254,20 @@ async def serve(args) -> None:
         web = Web(app, guard, tls=ctx is not None, port=args.port, setup_token=setup_token, plain_http=args.http,
                   forced_bind=bool(args.bind))
         quiet = os.environ.get("BAABAA_ACCESS_LOG") != "1"
-        server = Server(web, log=lambda kind, msg: None if (quiet and kind == "access") else print(f"[{kind}] {msg}", flush=True))
+
+        def log(kind, msg):
+            if not (quiet and kind == "access"):
+                print(f"[{kind}] {msg}", flush=True)
+
+        server = Server(web, log=log, plain=web.redirect if ctx is not None else None)
         for host in guard.bind:
             await server.listen_tcp(host, args.port, ctx)
         await server.listen_unix(str(app.paths.socket))
         if args.ca_port and ctx is not None:
             await _ca_server(app, guard, args.ca_port, args.port)
     except (Exception, SystemExit) as exc:
+        if names is not None:
+            names.close()
         _fall_back(exc)  # after an update that does not start: back to the version it came from
         raise
     urls = guard.urls(args.port, ctx is not None)
@@ -249,6 +278,8 @@ async def serve(args) -> None:
         print(f"baabaa is running on the local network: {urls[0]}", flush=True)
         for u in urls[1:]:
             print(f"                                        {u}", flush=True)
+        if web.addresses():
+            print(f"  On a phone or computer on your network, type {' or '.join(web.addresses())}", flush=True)
     if ctx is not None:
         print(f"  Install the local CA once on each device: {urls[0]}ca.crt  (file: {app.paths.tls / 'ca.crt'})", flush=True)
     if setup_token:
@@ -265,6 +296,8 @@ async def serve(args) -> None:
     await stop.wait()
     for t in tasks:
         t.cancel()
+    if names is not None:
+        names.close()  # goodbye first, so devices forget the names at once
     await app.shutdown()
     await server.close()
     if app.restarter.exec_root is not None:
@@ -341,12 +374,15 @@ async def _ca_server(app, guard, port: int, https_port: int) -> None:
     async def handler(req):
         if req.path == "/ca.crt":
             return Response((app.paths.tls / "ca.crt").read_bytes(), content_type="application/x-x509-ca-cert",
-                            headers=[("Content-Disposition", 'attachment; filename="baabaa-local-ca.crt"')])
+                            headers=[("Content-Disposition", 'inline; filename="baabaa-local-ca.crt"')])
         target = f"https://{guard.primary_ip}:{https_port}/"
         page = (f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
                 f"<title>baabaa</title><body style='font:16px system-ui;margin:2em;max-width:36em'>"
                 f"<h1>baabaa</h1><p>1. <a href='/ca.crt'>Download the local certificate authority</a> and install it "
-                f"(on phones: Settings, search for “certificate”).</p><p>2. Open <a href='{target}'>{target}</a>.</p>")
+                f"(iPhone or iPad: open this page in Safari, allow the profile, install it under Settings → General → "
+                f"VPN & Device Management within 8 minutes, then switch it on under General → About → Certificate Trust "
+                f"Settings; Android: Settings, search for “CA certificate”, choose the file).</p>"
+                f"<p>2. Open <a href='{target}'>{target}</a>.</p>")
         return Response(page, content_type="text/html; charset=utf-8")
 
     async def guarded(req):

@@ -177,8 +177,9 @@ select.input { width: auto; min-width: 160px; }
 .tb-heading { font-size: 17px; margin: 0 8px; }
 
 /* home */
-.home-wrap { flex: 1; min-height: 0; overflow-y: auto; display: flex; align-items: center; justify-content: center; padding: 20px 16px 12vh; }
-.home { width: 100%; max-width: var(--thread-w); display: grid; gap: 18px; }
+.home-wrap { flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; padding: 20px 16px 12vh; }
+/* centred with auto margins, not align-items: on a short screen that would push the greeting above the top, out of reach */
+.home { width: 100%; max-width: var(--thread-w); margin: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; min-width: 0; }
 .home-greet { display: flex; align-items: center; justify-content: center; gap: 14px; }
 .home-greet h1 { font-family: var(--reply-font); font-weight: 400; font-size: clamp(26px, 4vw, 38px); margin: 0; letter-spacing: -.01em; }
 .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
@@ -340,18 +341,22 @@ select.input { width: auto; min-width: 160px; }
   border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-2); box-shadow: var(--shadow); display: grid; place-items: center; cursor: pointer; }
 .jump-bottom:hover { color: var(--text); border-color: var(--border-strong); }
 .jump-bottom[hidden] { display: none; }
-.composer { border: 1px solid var(--border-strong); background: var(--bg-elev); border-radius: 20px; box-shadow: var(--shadow); padding: 10px 10px 8px 14px; display: grid; gap: 6px; transition: border-color .15s; }
+.composer { border: 1px solid var(--border-strong); background: var(--bg-elev); border-radius: 20px; box-shadow: var(--shadow); padding: 10px 10px 8px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; transition: border-color .15s; }
 .composer:focus-within { border-color: var(--text-3); }
 .composer.drop { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 .composer-home { padding: 14px 12px 10px 16px; }
 .composer-input { width: 100%; border: 0; outline: none; resize: none; background: none; font-size: 16px; line-height: 1.5; max-height: 40vh; padding: 2px 0; min-height: 26px; }
 .composer-home .composer-input { min-height: 52px; }
-.composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.composer-bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
 .composer-left, .composer-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+/* on a narrow screen the left group wraps; the right one never does, so the send button stays in the corner and a
+   long model name is cut short instead */
+.composer-right { flex-wrap: nowrap; flex-shrink: 0; max-width: 65%; }
 .composer-btn { border: 1px solid var(--border); border-radius: 50%; width: 32px; height: 32px; }
-.model-btn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; font-size: 13.5px; color: var(--text-2); cursor: pointer; padding: 5px 8px; border-radius: 8px; }
+.model-btn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; font-size: 13.5px; color: var(--text-2); cursor: pointer; padding: 5px 8px; border-radius: 8px; min-width: 0; }
+.model-btn > span:not(.icon) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 38vw; }
 .model-btn:hover { background: var(--bg-hover); color: var(--text); }
-.send-btn { width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--accent); color: var(--on-accent); cursor: pointer; display: grid; place-items: center; }
+.send-btn { width: 34px; height: 34px; border-radius: 10px; border: 0; padding: 0; background: var(--accent); color: var(--on-accent); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .send-btn:disabled { background: var(--border-strong); color: var(--bg-elev); cursor: default; }
 .send-btn.stop { background: var(--text); color: var(--bg); }
 .ctx-ring { color: var(--text-3); display: inline-grid; place-items: center; width: 26px; height: 26px; cursor: pointer; border-radius: 50%; }
@@ -553,6 +558,15 @@ body.export { padding: 20px; }
   .thread-inner { padding: 8px 14px 30px; }
   .msg-assistant { font-size: 15.5px; }
   .form-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  /* iPhones zoom the page in when a field with text smaller than 16px is focused, and the zoom stays */
+  input, select, textarea, .sb-search { font-size: 16px; }
+}
+@media (max-height: 540px) {
+  /* a phone on its side: the sidebar's fixed parts alone are taller than the screen, so the whole column scrolls */
+  .sidebar { overflow-y: auto; }
+  .sb-list { flex: none; overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 .conn-tools { margin: 4px 0; padding-left: 18px; font-size: 13.5px; display: grid; gap: 3px; }

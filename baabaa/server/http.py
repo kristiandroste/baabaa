@@ -6,11 +6,13 @@ Response (bytes) or a StreamResponse (an async iterator of bytes, e.g. Server-Se
 
 import asyncio
 import email.utils
+import functools
 import hashlib
 import json
 import mimetypes
 import os
 import re
+import socket
 import time
 from http import HTTPStatus
 from pathlib import Path
@@ -177,17 +179,25 @@ def static_response(root: Path, rel: str, request: Request) -> Response:
 
 
 class Server:
-    """Accepts connections, parses requests and hands them to `app(request) -> Response`."""
+    """Accepts connections, parses requests and hands them to `app(request) -> Response`. With `plain`, a TLS
+    port also answers plain HTTP (an address typed without https://) with `plain(request)`: a redirect."""
 
-    def __init__(self, app, log=None):
+    def __init__(self, app, log=None, plain=None):
         self.app = app
+        self.plain = plain
         self.log = log or (lambda *a: None)
         self.servers = []
         self.connections: set[asyncio.Task] = set()
 
-    async def listen_tcp(self, host: str, port: int, ssl_context=None):
-        srv = await asyncio.start_server(self._client, host, port, ssl=ssl_context, limit=MAX_HEADER,
-                                         reuse_address=True, backlog=128)
+    async def listen_tcp(self, host: str, port: int, ssl_context=None, reuse_address: bool = True):
+        if ssl_context is not None and self.plain is not None:
+            sock = socket.create_server((host, port), family=socket.AF_INET6 if ":" in host else socket.AF_INET,
+                                        backlog=128)
+            sock.setblocking(False)
+            srv = _TLSOrPlain(self, sock, ssl_context)
+        else:
+            srv = await asyncio.start_server(self._client, host, port, ssl=ssl_context, limit=MAX_HEADER,
+                                             reuse_address=reuse_address, backlog=128)
         self.servers.append(srv)
         return srv
 
@@ -207,7 +217,8 @@ class Server:
         for t in list(self.connections):
             t.cancel()
 
-    async def _client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def _client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, app=None):
+        app = app or self.app
         task = asyncio.current_task()
         self.connections.add(task)
         peer = writer.get_extra_info("peername")
@@ -230,7 +241,7 @@ class Server:
                 keep_alive = request.version == "HTTP/1.1" and (request.headers.get("connection") or "").lower() != "close"
                 started = time.monotonic()
                 try:
-                    response = await self.app(request)
+                    response = await app(request)
                 except HTTPError as exc:
                     response = Response({"error": exc.message, **exc.data}, status=exc.status)
                 except asyncio.CancelledError:
@@ -337,6 +348,74 @@ class Server:
                     await close()
                 except Exception:
                     pass
+
+
+class _TLSOrPlain:
+    """A TLS listener that also answers plain HTTP. A TLS connection opens with a handshake record (first byte
+    0x16), which is left unread for TLS; anything else is plain HTTP and goes to the server's `plain` app."""
+
+    def __init__(self, server: Server, sock: socket.socket, ssl_context):
+        self.server, self.ssl = server, ssl_context
+        self.sockets = [sock]
+        self.starting: set[asyncio.Task] = set()
+        self.task = asyncio.get_running_loop().create_task(self._accept(sock))
+
+    def close(self):
+        self.task.cancel()
+        for t in list(self.starting):
+            t.cancel()
+        self.sockets[0].close()
+
+    async def _accept(self, sock):
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
+                conn, _ = await loop.sock_accept(sock)
+            except (ConnectionAbortedError, InterruptedError):
+                continue
+            except OSError:  # out of file descriptors, for instance: wait instead of spinning
+                await asyncio.sleep(0.5)
+                continue
+            t = loop.create_task(self._start(conn))
+            self.starting.add(t)
+            t.add_done_callback(self.starting.discard)
+
+    async def _start(self, conn):
+        loop = asyncio.get_running_loop()
+        try:
+            first = await asyncio.wait_for(_peek(conn), HEADER_TIMEOUT)
+            if not first:
+                raise ConnectionError("closed before a request")
+            tls = first == b"\x16"
+            client = functools.partial(self.server._client, app=None if tls else self.server.plain)
+
+            def protocol():
+                return asyncio.StreamReaderProtocol(asyncio.StreamReader(limit=MAX_HEADER), client)
+            if tls:
+                await loop.connect_accepted_socket(protocol, conn, ssl=self.ssl, ssl_handshake_timeout=HEADER_TIMEOUT)
+            else:
+                await loop.connect_accepted_socket(protocol, conn)
+        except (OSError, asyncio.TimeoutError):  # failed handshakes (ssl.SSLError) and resets are OSErrors
+            conn.close()
+        except Exception as exc:  # the server must survive whatever a client sends
+            self.server.log("error", f"connection: {exc!r}")
+            conn.close()
+
+
+async def _peek(conn: socket.socket) -> bytes:
+    """The first byte the client sent, left in the socket."""
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            return conn.recv(1, socket.MSG_PEEK)
+        except (BlockingIOError, InterruptedError):
+            pass
+        ready = loop.create_future()
+        loop.add_reader(conn.fileno(), lambda: ready.done() or ready.set_result(None))
+        try:
+            await ready
+        finally:
+            loop.remove_reader(conn.fileno())
 
 
 def _reason(status: int) -> str:

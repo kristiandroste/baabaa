@@ -25,6 +25,7 @@ UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 PUBLIC = {("GET", "/api/profiles"), ("POST", "/api/login"), ("GET", "/api/setup"), ("POST", "/api/setup"),
           ("GET", "/api/health"), ("GET", "/ca.crt")}
 
+SAFE_TARGET = re.compile(r"/[!-~]*")  # a path and query in printable ASCII, for a redirect's Location
 INLINE_IMAGES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"}
 APP_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
            "media-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; frame-src 'self' blob: data:; "
@@ -56,13 +57,35 @@ class Web:
         saved = saved_mode(self.app.maindb)
         running = "local" if self.guard.local_only else "lan"
         out = {"saved": saved, "running": running, "urls": self.guard.urls(self.port, self.tls), "next_urls": None,
-               "forced": self.forced_bind}
+               "forced": self.forced_bind, "addresses": self.addresses()}
         if saved != running and not self.forced_bind:
             if saved == "local":
                 out["next_urls"] = [f"http://localhost:{self.port}/"]
             else:
                 out["next_urls"] = LanGuard().urls(self.port, not self.plain_http)
         return out
+
+    def addresses(self) -> list[str]:
+        """What to type on a phone on the network: ["baabaa.local:8443", "ai.local:8443"]."""
+        if self.guard.local_only:
+            return []
+        return [f"{n}:{self.port}" for n in self.guard.local_names]
+
+    async def redirect(self, req: Request):
+        """Plain HTTP on the HTTPS port (an address typed without https://): a redirect to the same name over
+        HTTPS. The one thing served without TLS is the certificate itself (public, nothing secret): an iPhone's
+        profile installer fetches it on its own and cannot trust baabaa yet, and over HTTPS it fails silently."""
+        if not self.guard.allowed_client(req.client_ip):
+            return Response({"error": "baabaa serves the local network only"}, 403)
+        if req.path == "/ca.crt" and req.method in ("GET", "HEAD"):
+            return await self.ca_cert(req)
+        host = self.guard.known_host(req.headers.get("host")) or self.guard.primary_ip
+        scheme, default = ("https", 443) if self.tls else ("http", 80)
+        where = f"[{host}]" if ":" in host else host
+        where += "" if self.port == default else f":{self.port}"
+        target = req.target if SAFE_TARGET.fullmatch(req.target) else "/"
+        return Response(b"", 307, content_type="", headers=[("Location", f"{scheme}://{where}{target}"),
+                                                             ("Cache-Control", "no-store")])
 
     # entry --------------------------------------------------------------------------------------
     async def __call__(self, req: Request):
@@ -324,15 +347,16 @@ class Web:
                 "servers": {"llamacpp": (self.app.llamacpp.running() or {}).get("name"),
                             "sdcpp": (self.app.sdcpp.running() or {}).get("name")},
                 "update": self.app.updates.status(), "restart": self.app.restarter.public(),
-                "network": "local" if self.guard.local_only else "lan"})
+                "network": "local" if self.guard.local_only else "lan", "addresses": self.addresses()})
         return json_response(out)
 
     async def ca_cert(self, req):
         crt = self.app.paths.tls / "ca.crt"
         if not crt.exists():
             raise HTTPError(404, "HTTPS is not enabled")
+        # inline, not an attachment: an iPhone offers to install a certificate it is shown, but files a download away
         return Response(crt.read_bytes(), content_type="application/x-x509-ca-cert",
-                        headers=[("Content-Disposition", 'attachment; filename="baabaa-local-ca.crt"')])
+                        headers=[("Content-Disposition", 'inline; filename="baabaa-local-ca.crt"')])
 
     async def setup_info(self, req):
         return json_response({"needed": self.app.accounts.count() == 0})
@@ -442,7 +466,7 @@ class Web:
                                   "label": q["running"]["label"] if q["running"].get("account_id") == req.account["id"] else ""}
                       if q["running"] else None},
             "windows": self.app.events.windows(req.account["id"]),
-            "network": "local" if self.guard.local_only else "lan"})
+            "network": "local" if self.guard.local_only else "lan", "addresses": self.addresses()})
 
     async def events(self, req):
         sub = self.app.events.subscribe(req.account["id"], req.account["role"] == "owner", req.window)

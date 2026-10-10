@@ -175,11 +175,13 @@ Who can connect is the owner's choice: the installer asks, `baabaa network local
 - **Other devices too** (`lan`): baabaa also listens on the address of the interface with the default route,
   over HTTPS with its own certificate authority (install `/ca.crt` once on each device), and accepts clients
   from loopback and that subnet. Every account without a password can then be opened by anyone on the network.
+  On Linux it answers to `baabaa.local` and `ai.local` (multicast DNS), and plain HTTP on its port gets a redirect
+  to HTTPS.
 
 Data folders from before this setting existed keep `lan`. In both modes IPv6 is not served, requests must use one of
 the host's own names or addresses (against DNS rebinding), and state-changing requests need a CSRF token and a
-same-origin `Origin`. Options: `--bind` (choose the addresses yourself), `--allow CIDR`, `--name HOST`,
-`--port`, `--http`.
+same-origin `Origin`. Options: `--bind` (choose the addresses yourself), `--allow CIDR`, `--name HOST` (one
+ending in `.local` is announced on the network too), `--port`, `--http`.
 
 ## Development
 

@@ -114,6 +114,11 @@ class LanGuard:
         self.names.update(n.lower() for n in (names or []))
         self.addresses = {i["ip"] for i in ifaces} | set(self.bind)
         self.primary_ip = primary["ip"] if primary else "127.0.0.1"
+        self.local_names: list[str] = []  # names on the network, such as baabaa.local (mdns.py)
+
+    def add_local_names(self, names: list[str]) -> None:
+        self.local_names = list(names)
+        self.names.update(names)
 
     def allowed_client(self, ip: str) -> bool:
         if ip == "local":  # Unix socket
@@ -129,15 +134,19 @@ class LanGuard:
                 return addr.is_loopback
         return any(addr in n for n in self.networks)
 
-    def allowed_host(self, host_header: str | None) -> bool:
+    def known_host(self, host_header: str | None) -> str | None:
+        """The name or address in a Host header when it is one of this server's, else None."""
         if not host_header:
-            return False
+            return None
         host = host_header.strip().lower()
         if host.startswith("["):
             host = host[1:].split("]", 1)[0]
         else:
             host = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
-        return host in self.names or host in self.addresses
+        return host if host in self.names or host in self.addresses else None
+
+    def allowed_host(self, host_header: str | None) -> bool:
+        return self.known_host(host_header) is not None
 
     def allowed_origin(self, origin: str | None) -> bool:
         if not origin:
@@ -153,8 +162,8 @@ class LanGuard:
     def urls(self, port: int, tls: bool) -> list[str]:
         scheme = "https" if tls else "http"
         lan = [a for a in self.bind if not a.startswith("127.")]
-        out = [f"{scheme}://{a}:{port}/" for a in lan]
-        if lan:
+        out = [f"{scheme}://{a}:{port}/" for a in lan] + [f"{scheme}://{n}:{port}/" for n in self.local_names]
+        if lan and f"{self.hostname}.local" not in self.local_names:
             out.append(f"{scheme}://{self.hostname}.local:{port}/")
         out.append(f"{scheme}://localhost:{port}/")
         return out

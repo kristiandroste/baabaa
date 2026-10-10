@@ -3,6 +3,21 @@
 The notes for each release. `baabaa update` and the browser's update notice show them before an update,
 and every account sees the newest section once afterwards.
 
+## 0.9.4 - 2026-10-10
+
+- On the network, baabaa has names: phones and computers there open it as `baabaa.local:8443` or `ai.local:8443`,
+  with no address to remember (Linux for now; on a Mac, the Mac's own name). `--name` on `baabaa start` adds one.
+- An address typed without `https://` opens baabaa instead of failing: plain HTTP on its port gets a redirect to
+  HTTPS. The one thing served without HTTPS is the certificate itself, so a phone can fetch it before it trusts
+  baabaa (an iPhone's installer fetches it on its own, and over HTTPS it failed silently).
+- Installing baabaa's certificate on a phone or computer is explained step by step, for each kind of device, in
+  Settings → About and in the tutorial. The certificate is sent so that Safari and Firefox offer to install it
+  directly.
+- Fixed on phones: fields with small text made iPhones zoom the page in, and the zoom stayed; with the phone on
+  its side, the bottom of the sidebar (settings, the account) was out of reach; on short screens the greeting was
+  pushed above the top edge; the send button left its corner when the model's name was long, and a long name
+  could widen the whole page.
+
 ## 0.9.3 - 2026-10-05
 
 - A thread in place of the trotting sheep. While baabaa works on a reply, a strand of wool curls as the model's

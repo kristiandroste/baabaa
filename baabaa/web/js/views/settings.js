@@ -431,6 +431,27 @@ function accountCard(a) {
       } }, 'Grant'))) : null);
 }
 
+// Installing the certificate on each kind of device; the one this browser runs on comes first (docs/TUTORIAL.md says the same).
+function certificateSteps(address) {
+  const link = `http://${address || location.host}/ca.crt`;  // plain http on purpose: the phone cannot trust baabaa yet
+  const ua = navigator.userAgent;
+  const steps = [
+    ['iPhone or iPad', /iPhone|iPad/.test(ua) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1),
+      `Open ${link} in Safari, even if you use another browser: only Safari can install certificates, and every browser on the device then trusts it. Allow the configuration profile. Then, within 8 minutes: Settings → General → VPN & Device Management → the baabaa profile → Install. Then Settings → General → About → Certificate Trust Settings: switch on baabaa local CA.`],
+    ['Android', /Android/.test(ua),
+      'Download the certificate, then in Settings search for "CA certificate" (under Security → Encryption & credentials → Install a certificate), choose CA certificate, accept the warning and pick the downloaded file. Chrome trusts it at once; Firefox keeps its own list.'],
+    ['Mac', /Mac/.test(ua) && navigator.maxTouchPoints <= 1,
+      'Open the file; Keychain Access adds it. Double-click it there, open Trust and set "When using this certificate" to Always Trust. Firefox asks on its own when it opens the file.'],
+    ['Windows', /Windows/.test(ua),
+      'Open the file → Install Certificate → Current User → "Place all certificates in the following store" → Trusted Root Certification Authorities, and accept the warning. Firefox asks on its own when it opens the file.'],
+    ['Linux', /Linux/.test(ua) && !/Android/.test(ua),
+      'Firefox asks on its own when it opens the file. Chrome and Chromium read their own list: certutil -d sql:$HOME/.pki/nssdb -A -t C -n baabaa -i ca.crt (certutil comes with libnss3-tools).'],
+  ];
+  steps.sort((a, b) => (b[1] ? 1 : 0) - (a[1] ? 1 : 0));
+  return h('ul', { class: 'about-list cert-steps' }, ...steps.map(([name, here, text]) =>
+    h('li', { class: here ? '' : 'muted' }, h('b', null, `${name}${here ? ' (this device)' : ''}: `), text)));
+}
+
 // About ------------------------------------------------------------------------------------------------------------------
 async function about(pane) {
   let st = {};
@@ -449,8 +470,11 @@ async function about(pane) {
         h('li', null, `Open windows for your account: ${st.windows ?? '?'}`))),
     upd,
     net,
-    st.network === 'local' ? null : section('Phones and other computers', h('p', { class: 'muted' }, 'baabaa uses its own certificate authority for HTTPS on your network. Install it once on each device to avoid warnings and to allow the microphone.'),
-      h('a', { class: 'btn', href: '/ca.crt' }, icon('download', 15), ' Download the certificate')),
+    st.network === 'local' ? null : section('Phones and other computers',
+      (st.addresses || []).length ? h('p', null, 'On a phone or computer on your network, type ', h('b', null, st.addresses.join(' or ')), ' in the browser.') : null,
+      h('p', { class: 'muted' }, 'baabaa uses its own certificate authority for HTTPS on your network. Install it once on each device to avoid warnings and to allow the microphone.'),
+      h('a', { class: 'btn', href: '/ca.crt' }, icon('download', 15), ' Download the certificate'),
+      certificateSteps((st.addresses || [])[0])),
     section('Keyboard', h('table', { class: 'keys' }, [
       ['Enter', 'Send (Shift+Enter for a new line)'], ['Esc', 'Stop the reply'], ['Shift+Tab', 'Change mode (in a folder)'],
       ['Ctrl+K', 'Search'], ['Ctrl+Shift+O', 'New chat'], ['Ctrl+.', 'Show or hide the sidebar'], ['Ctrl+,', 'Settings'],

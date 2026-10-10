@@ -16,7 +16,8 @@ What it does to keep that setting safe:
 - **Who can reach it.** A new installation accepts this computer only. When the owner opens it to the
   network, it accepts devices on the same subnet only, over HTTPS with its own certificate authority, and
   only under this computer's own names and addresses. Requests that change anything need a session, a
-  same-origin `Origin` and a CSRF token.
+  same-origin `Origin` and a CSRF token. It announces its names (`baabaa.local`, `ai.local`) by multicast DNS,
+  answering only for its own names and only to that subnet; plain HTTP on its port gets nothing but a redirect to HTTPS.
 - **Accounts.** Passwords are optional and stored with scrypt; repeated wrong passwords are refused for a while.
   Members use only the folders an owner grants them.
 - **What the model may do.** Edits and commands go through the conversation's mode, the account's rules, a
@@ -42,6 +43,10 @@ What it does to keep that setting safe:
 - **A model can be misled by what it reads.** A web page, a file or a tool's output can contain instructions
   aimed at the model. Modes and the sandbox limit what a misled model can do, and Auto mode's judge is itself
   a model and can be wrong. For folders that matter, use Manual or Accept edits and read what you approve.
+- **A name or address typed without `https://` starts in plain HTTP.** That first request is not encrypted,
+  and names on the network are not authenticated, so another device there could answer instead of baabaa.
+  With baabaa's certificate installed, the browser warns when the answer does not come from baabaa; a
+  bookmark with `https://` skips the plain request.
 - **Chats without a folder read web pages without asking.** A conversation that works in a folder asks before
   the first page from a site (Auto mode's judge decides instead), because a misled model could put something
   it has read there into the address of a page it fetches. A chat without a folder reads pages freely, like

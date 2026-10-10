@@ -334,6 +334,8 @@ def status() -> int:
             print(f"  Open: {urls[0]}" + (f"   (also {', '.join(urls[1:])})" if urls[1:] else ""))
         if health.get("network") == "local":
             print("  It accepts this computer only (baabaa network lan lets other devices in).")
+        elif health.get("addresses"):
+            print(f"  On a phone or computer on your network, type {' or '.join(health['addresses'])}")
         q = health.get("queue") or {}
         paused = q.get("paused")
         if paused:

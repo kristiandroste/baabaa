@@ -3,6 +3,7 @@
 import asyncio
 import http.client
 import json
+from pathlib import Path
 import os
 import subprocess
 import sys
@@ -28,6 +29,116 @@ class TestLanGuard(unittest.TestCase):
         self.assertFalse(g.allowed_host("evil.example"))
         self.assertFalse(g.allowed_origin("https://evil.example"))
         self.assertTrue(g.allowed_origin("https://localhost:8443"))
+
+    def test_names_on_the_network(self):
+        g = LanGuard(bind=["127.0.0.1", "192.168.50.20"], networks=["192.168.50.0/24"])
+        self.assertFalse(g.allowed_host("baabaa.local"))
+        g.add_local_names(["baabaa.local", "ai.local"])
+        self.assertEqual(g.known_host("AI.local:8443"), "ai.local")
+        self.assertEqual(g.known_host("192.168.50.20:8443"), "192.168.50.20")
+        self.assertIsNone(g.known_host("evil.example"))
+        self.assertEqual(g.urls(8443, True)[:3], ["https://192.168.50.20:8443/", "https://baabaa.local:8443/",
+                                                  "https://ai.local:8443/"])
+
+
+class TestPlainOnTheTLSPort(unittest.TestCase):
+    """An address typed without https:// reaches the HTTPS port as plain HTTP, and gets a redirect to HTTPS."""
+
+    @classmethod
+    def setUpClass(cls):
+        import shutil
+        import threading
+        import types
+        from pathlib import Path
+        if not shutil.which("openssl"):
+            raise unittest.SkipTest("needs openssl")
+        from baabaa.server import tls
+        from baabaa.server.api import Web
+        from baabaa.server.http import Response, Server
+        cls.tmp = tempfile.TemporaryDirectory()
+        key, crt = tls.ensure_server_cert(Path(cls.tmp.name), "testhost", ["localhost"], ["127.0.0.1"])
+        guard = LanGuard(bind=["127.0.0.1"], networks=[])
+        guard.add_local_names(["baabaa.local"])
+        cls.web = types.SimpleNamespace(guard=guard, tls=True, port=0, app=types.SimpleNamespace(
+            paths=types.SimpleNamespace(tls=Path(cls.tmp.name))))
+        cls.web.ca_cert = lambda req: Web.ca_cert(cls.web, req)
+
+        async def app(req):
+            return Response("hello", content_type="text/plain")
+
+        cls.loop = asyncio.new_event_loop()
+        started = threading.Event()
+
+        def run():
+            asyncio.set_event_loop(cls.loop)
+            cls.server = Server(app, plain=lambda req: Web.redirect(cls.web, req))
+            s = cls.loop.run_until_complete(cls.server.listen_tcp("127.0.0.1", 0, tls.server_context(key, crt)))
+            cls.port = cls.web.port = s.sockets[0].getsockname()[1]
+            started.set()
+            cls.loop.run_forever()
+
+        cls.thread = threading.Thread(target=run, daemon=True)
+        cls.thread.start()
+        started.wait(10)
+
+    @classmethod
+    def tearDownClass(cls):
+        asyncio.run_coroutine_threadsafe(cls.server.close(), cls.loop).result(5)
+        cls.loop.call_soon_threadsafe(cls.loop.stop)
+        cls.thread.join(5)
+        cls.loop.close()
+        cls.tmp.cleanup()
+
+    def plain(self, path, host):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("GET", path, headers={"Host": host})
+        r = c.getresponse()
+        r.read()
+        c.close()
+        return r.status, r.getheader("Location")
+
+    def test_redirect(self):
+        self.assertEqual(self.plain("/c/abc?x=1", f"BAABAA.local:{self.port}"),
+                         (307, f"https://baabaa.local:{self.port}/c/abc?x=1"))
+        # an unknown name, or a target that is not a path: this server's own address, at the top
+        self.assertEqual(self.plain("http://evil.example/x", "evil.example"),
+                         (307, f"https://{self.web.guard.primary_ip}:{self.port}/"))
+
+    def test_certificate_without_tls(self):
+        """The one plain answer: the certificate itself, which a phone must get before it can trust baabaa."""
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("GET", "/ca.crt", headers={"Host": "baabaa.local"})
+        r = c.getresponse()
+        self.assertEqual((r.status, r.getheader("Content-Type"), r.getheader("Content-Disposition")),
+                         (200, "application/x-x509-ca-cert", 'inline; filename="baabaa-local-ca.crt"'))
+        self.assertEqual(r.read(), (Path(self.tmp.name) / "ca.crt").read_bytes())
+        c.close()
+
+    def test_tls_as_before(self):
+        import ssl
+        ctx = ssl.create_default_context(cafile=os.path.join(self.tmp.name, "ca.crt"))
+        c = http.client.HTTPSConnection("127.0.0.1", self.port, timeout=10, context=ctx)
+        c.request("GET", "/", headers={"Host": "localhost"})
+        r = c.getresponse()
+        self.assertEqual((r.status, r.read()), (200, b"hello"))
+        c.close()
+
+    def test_silent_and_broken_clients(self):
+        import socket
+        socket.create_connection(("127.0.0.1", self.port), timeout=5).close()  # connects, sends nothing
+        with socket.create_connection(("127.0.0.1", self.port), timeout=5) as s:  # a broken TLS handshake
+            s.sendall(b"\x16\x03\x01\x00\x05hello")
+        self.test_tls_as_before()
+
+    def test_strangers(self):
+        from baabaa.server.api import Web
+        from baabaa.server.http import Headers, Request
+        req = Request("GET", "/", "HTTP/1.1", Headers([("Host", "baabaa.local")]), b"", "8.8.8.8", "tcp")
+        self.assertEqual(asyncio.run(Web.redirect(self.web, req)).status, 403)
+
+    def test_addresses_to_type(self):
+        from baabaa.server.api import Web
+        self.assertEqual(Web.addresses(self.web), [f"baabaa.local:{self.port}"])
 
 
 class TestApi(unittest.TestCase):
