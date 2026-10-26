@@ -3,6 +3,19 @@
 The notes for each release. `baabaa update` and the browser's update notice show them before an update,
 and every account sees the newest section once afterwards.
 
+## Unreleased
+
+- On phones, the buttons in the message box show their icon only and the model's name is cut short, so they all
+  sit on one line and the box takes less of the screen.
+- The sidebar's sections (Chats, Projects, Code, …) fold away with the chevron beside "New chat", leaving New chat,
+  the search and the chat list. Phones start folded; the choice is remembered on each device.
+- On a phone, the sidebar closes when you tap the page beside it, or anything in it, including the chat that is
+  already open.
+- Settings fit a phone's screen: each field and dropdown takes the row's width (a dropdown with a long model name
+  used to widen the whole page, and text fields were squeezed), the tabs are a single row of icons, the usage
+  tables show their first columns, long code lines wrap, and the panel is as tall as the screen really is under
+  the toolbar.
+
 ## 0.9.6 - 2026-10-25
 
 - Fixed: the arrow in the "jump to the latest" button sat off-centre in Safari and on iPhones.

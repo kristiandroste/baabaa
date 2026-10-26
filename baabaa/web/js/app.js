@@ -180,7 +180,9 @@ async function renderLayout(root) {
   const sidebar = h('aside', { class: 'sidebar', id: 'sidebar' });
   const main = h('main', { class: 'main', id: 'main' });
   const panel = h('aside', { class: 'panel', id: 'panel', hidden: true });
-  const layout = h('div', { class: 'layout' + (S.sidebarOpen ? '' : ' sidebar-closed'), id: 'layout' }, sidebar, main, panel);
+  // on a phone the sidebar lies over the page; a tap on the page beside it closes it
+  const backdrop = h('div', { class: 'sb-backdrop', onclick: () => toggleSidebar(false) });
+  const layout = h('div', { class: 'layout' + (S.sidebarOpen ? '' : ' sidebar-closed'), id: 'layout' }, sidebar, backdrop, main, panel);
   root.appendChild(layout);
   const { renderSidebar } = await import('./views/sidebar.js');
   renderSidebar(sidebar);

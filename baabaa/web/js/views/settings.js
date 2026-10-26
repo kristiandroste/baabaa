@@ -30,7 +30,7 @@ export function openSettings(tab, onClose) {
   M.nav.appendChild(h('h2', null, 'Settings'));
   for (const t of TABS) {
     if (t.owner && S.me.role !== 'owner') continue;
-    M.nav.appendChild(h('a', { class: 'settings-tab' + (t.id === tab ? ' active' : ''), href: `#/settings/${t.id}` }, icon(t.icon, 16), t.label));
+    M.nav.appendChild(h('a', { class: 'settings-tab' + (t.id === tab ? ' active' : ''), href: `#/settings/${t.id}`, title: t.label }, icon(t.icon, 16), h('span', null, t.label)));
   }
   // The same tab drawn again (after a change in it) keeps its place: its old height is held until the new
   // content is in. Another tab starts at the top.

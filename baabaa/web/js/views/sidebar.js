@@ -6,6 +6,12 @@ import { menu, modal, promptDialog, confirmDialog, errorToast } from '../ui.js';
 import { updateNotice } from './update.js';
 
 let listEl, footerEl, filter = '';
+const NAV_KEY = 'baabaa-sidebar-nav';  // 'open' or 'compact': whether the sections are shown or folded away
+
+function navCompact() {
+  try { const v = localStorage.getItem(NAV_KEY); if (v) return v === 'compact'; } catch {}
+  return matchMedia('(max-width: 900px)').matches;  // on a phone the chat list needs the room
+}
 
 export function renderSidebar(el) {
   clear(el);
@@ -13,6 +19,7 @@ export function renderSidebar(el) {
     h('a', { class: 'brand', href: '#/', title: 'baabaa' }, logo(26), h('span', { class: 'brand-name' }, 'baabaa')),
     h('button', { class: 'icon-btn', type: 'button', title: 'Close sidebar (Ctrl+.)', onclick: () => toggleSidebar(false) }, icon('sidebar')));
   const newBtn = h('a', { class: 'sb-new', href: '#/', title: 'New chat (Ctrl+Shift+O)' }, icon('plus', 18), h('span', null, 'New chat'));
+  const navToggle = h('button', { class: 'icon-btn tiny sb-nav-toggle', type: 'button' }, icon('chevron', 16));
   const nav = h('nav', { class: 'sb-nav' },
     navItem('#/', 'list', 'Chats'),
     navItem('#/projects', 'box', 'Projects'),
@@ -26,7 +33,23 @@ export function renderSidebar(el) {
   search.addEventListener('keydown', e => { if (e.key === 'Enter' && search.value.trim()) openSearch(search.value.trim()); });
   listEl = h('div', { class: 'sb-list', role: 'list' });
   footerEl = h('div', { class: 'sb-foot' });
-  el.append(head, newBtn, nav, h('div', { class: 'sb-search-wrap' }, icon('search', 16), search), listEl, footerEl);
+  const setNav = compact => {  // the sections shown, or folded away so the chat list gets the room
+    nav.classList.toggle('compact', compact);
+    navToggle.classList.toggle('open', !compact);
+    navToggle.title = compact ? 'Show the sections' : 'Hide the sections';
+    navToggle.setAttribute('aria-expanded', String(!compact));
+  };
+  setNav(navCompact());
+  navToggle.addEventListener('click', () => {
+    const compact = !nav.classList.contains('compact');
+    setNav(compact);
+    try { localStorage.setItem(NAV_KEY, compact ? 'compact' : 'open'); } catch {}
+  });
+  el.append(head, h('div', { class: 'sb-new-row' }, newBtn, navToggle), nav, h('div', { class: 'sb-search-wrap' }, icon('search', 16), search), listEl, footerEl);
+  // on a phone, choosing anything in the sidebar closes it, also the chat that is already open
+  el.addEventListener('click', e => {
+    if (e.target.closest('a[href]') && matchMedia('(max-width: 900px)').matches) toggleSidebar(false);
+  });
   renderList();
   renderFooter();
   loadConversations();

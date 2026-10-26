@@ -90,7 +90,7 @@ kbd { font: 12px var(--mono); background: var(--bg-code); border: 1px solid var(
 .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 textarea.input { resize: vertical; line-height: 1.5; }
 .small-input { padding: 5px 9px; font-size: 13px; width: auto; }
-select.input { width: auto; min-width: 160px; }
+select.input { width: auto; min-width: 160px; max-width: 100%; }  /* a long model name must not widen the page */
 .field { display: grid; gap: 6px; margin: 10px 0; font-size: 14px; }
 .field > span { color: var(--text-2); font-size: 13px; }
 .color-input { width: 56px; height: 34px; padding: 2px; }
@@ -123,9 +123,16 @@ select.input { width: auto; min-width: 160px; }
 /* sidebar */
 .sidebar { background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .layout.sidebar-closed .sidebar { border: 0; }
+.sb-backdrop { display: none; }
 .sb-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 10px 6px 14px; }
 .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); font-weight: 650; font-size: 18px; letter-spacing: -.01em; }
-.sb-new { display: flex; align-items: center; gap: 8px; margin: 6px 10px 4px; padding: 8px 10px; border-radius: 10px; text-decoration: none; color: var(--accent); font-weight: 600; }
+.sb-new-row { display: flex; align-items: center; margin: 6px 10px 4px; }
+.sb-new { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; text-decoration: none; color: var(--accent); font-weight: 600; }
+/* the chevron folds the sections away (and back), leaving New chat and the search; it points down when they are folded */
+.sb-nav-toggle { color: var(--text-3); }
+.sb-nav-toggle .icon { transition: transform .15s; }
+.sb-nav-toggle.open .icon { transform: rotate(180deg); }
+.sb-nav.compact { display: none; }
 .sb-new:hover { background: var(--bg-hover); }
 .sb-new .icon { background: var(--accent); color: var(--on-accent); border-radius: 50%; width: 24px; height: 24px; }
 .sb-nav { display: grid; gap: 1px; padding: 0 10px; }
@@ -545,17 +552,32 @@ body.export { padding: 20px; }
   .layout, .layout.sidebar-closed, .layout.panel-open { grid-template-columns: 0 minmax(0, 1fr) 0; }
   .sidebar { position: fixed; z-index: 40; top: 0; bottom: 0; left: 0; width: min(300px, 86vw); transform: translateX(-100%); transition: transform .2s; box-shadow: var(--shadow-lg); }
   .layout:not(.sidebar-closed) .sidebar { transform: none; }
+  .layout:not(.sidebar-closed) .sb-backdrop { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(20, 18, 14, .25); }
   .layout:not(.sidebar-closed) .tb-sidebar { display: inline-flex; }
   .panel { position: fixed; z-index: 45; inset: 0; }
-  .settings { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  /* The settings box is an item of a centring grid, and a grid item is by default never narrower than its
+     content (min-width: auto); WebKit measures that content wider than Chrome does, so on an iPhone the box grew
+     past the screen on tabs with wide dropdowns, and the page could be dragged sideways. A definite width, and
+     min-width: 0 at every level, keep the box exactly as wide as the screen. */
+  .settings-modal { width: 100%; max-width: 100%; min-width: 0; }
+  .settings { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; min-width: 0; }
   .settings-nav { border-right: 0; border-bottom: 1px solid var(--border); display: flex; overflow-x: auto; padding: 10px; }
   .settings-nav h2 { display: none; }
   .settings-pane { padding: 16px; }
   .settings-modal { height: 100vh; max-height: 100vh; border-radius: 0; }
+  @supports (height: 100dvh) { .settings-modal { height: 100dvh; max-height: 100dvh; } }  /* iPhones: 100vh is taller than the screen under the toolbar */
   .overlay { padding: 0; }
   .model-row, .job-row { grid-template-columns: 1fr; }
-  .set-row { flex-direction: column; align-items: flex-start; }
-  .set-control { max-width: 100%; }
+  /* each row is a column; the control box takes the whole row, so a text field is as wide as the screen and a
+     dropdown cannot grow to its longest option (Safari sizes it to that, 418px for a long model name) */
+  .set-row { flex-direction: column; align-items: stretch; }
+  .set-control { max-width: 100%; width: 100%; justify-content: flex-start; }
+  .set-control > .input, .set-control textarea.input { width: 100%; min-width: 0; }
+  /* iPhones ignore max-width on a dropdown and size it to its longest option; an explicit width holds */
+  select.input { width: 100%; min-width: 0; }
+  .settings-pane, .settings-modal { overflow-x: hidden; }  /* and nothing in Settings may scroll the page sideways */
+  .set-controls, .swatches { justify-content: flex-start; }
+  .set-controls .input:not(select) { width: 100%; }
   .thread-inner { padding: 8px 14px 30px; }
   .msg-assistant { font-size: 15.5px; }
   .form-grid { grid-template-columns: 1fr; }
@@ -563,6 +585,28 @@ body.export { padding: 20px; }
 @media (max-width: 900px) {
   /* iPhones zoom the page in when a field with text smaller than 16px is focused, and the zoom stays */
   input, select, textarea, .sb-search { font-size: 16px; }
+}
+@media (max-width: 600px) {
+  /* Settings on a phone: the tabs show their icon only, in one row that needs no sideways scrolling (the pane's
+     heading names the section); the usage tables keep their first five columns and cut long names short. */
+  .settings-nav { flex-wrap: wrap; gap: 2px; padding: 8px 10px; }
+  .settings-tab > span:not(.icon) { display: none; }
+  .settings-tab { padding: 8px 9px; }
+  table.data { font-size: 12.5px; }
+  table.data th, table.data td { padding: 5px 6px; }
+  table.data th:nth-child(n+6), table.data td:nth-child(n+6) { display: none; }
+  table.data td:first-child { max-width: 27vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .settings-pane pre { white-space: pre-wrap; overflow-wrap: anywhere; }  /* a long line wraps rather than scrolls */
+}
+@media (max-width: 340px) {
+  table.data td:first-child { max-width: 22vw; }  /* the smallest phones */
+  /* on a phone the message box's pills show their icon only, so the whole row fits on one line; the word is in the
+     tooltip. The model name takes what is left and is cut short, so the send button stays on that line too. */
+  .composer-left :is(.pill, .chip-btn) > .icon + span { display: none; }
+  .composer-left :is(.pill, .chip-btn) { padding: 7px 9px; }
+  .composer-left :is(.pill, .chip-btn) .icon svg { width: 16px; height: 16px; }
+  .composer-left { flex: 0 1 auto; }
+  .composer-right { flex: 1 1 0; max-width: none; justify-content: flex-end; }
 }
 @media (max-height: 540px) {
   /* a phone on its side: the sidebar's fixed parts alone are taller than the screen, so the whole column scrolls */
