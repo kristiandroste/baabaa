@@ -597,9 +597,6 @@ body.export { padding: 20px; }
   table.data th:nth-child(n+6), table.data td:nth-child(n+6) { display: none; }
   table.data td:first-child { max-width: 27vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .settings-pane pre { white-space: pre-wrap; overflow-wrap: anywhere; }  /* a long line wraps rather than scrolls */
-}
-@media (max-width: 340px) {
-  table.data td:first-child { max-width: 22vw; }  /* the smallest phones */
   /* on a phone the message box's pills show their icon only, so the whole row fits on one line; the word is in the
      tooltip. The model name takes what is left and is cut short, so the send button stays on that line too. */
   .composer-left :is(.pill, .chip-btn) > .icon + span { display: none; }
@@ -607,6 +604,9 @@ body.export { padding: 20px; }
   .composer-left :is(.pill, .chip-btn) .icon svg { width: 16px; height: 16px; }
   .composer-left { flex: 0 1 auto; }
   .composer-right { flex: 1 1 0; max-width: none; justify-content: flex-end; }
+}
+@media (max-width: 340px) {
+  table.data td:first-child { max-width: 22vw; }  /* the smallest phones */
 }
 @media (max-height: 540px) {
   /* a phone on its side: the sidebar's fixed parts alone are taller than the screen, so the whole column scrolls */
