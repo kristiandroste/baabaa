@@ -338,7 +338,8 @@ select.input { width: auto; min-width: 160px; }
 /* composer */
 .composer-dock { flex: none; padding: 0 16px 10px; max-width: calc(var(--thread-w) + 32px); width: 100%; margin: 0 auto; position: relative; }
 .jump-bottom { position: absolute; top: -46px; left: 50%; transform: translateX(-50%); z-index: 3; width: 34px; height: 34px; border-radius: 50%;
-  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-2); box-shadow: var(--shadow); display: grid; place-items: center; cursor: pointer; }
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-2); box-shadow: var(--shadow); padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .jump-bottom:hover { color: var(--text); border-color: var(--border-strong); }
 .jump-bottom[hidden] { display: none; }
 .composer { border: 1px solid var(--border-strong); background: var(--bg-elev); border-radius: 20px; box-shadow: var(--shadow); padding: 10px 10px 8px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; transition: border-color .15s; }

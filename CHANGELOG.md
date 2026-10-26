@@ -3,6 +3,10 @@
 The notes for each release. `baabaa update` and the browser's update notice show them before an update,
 and every account sees the newest section once afterwards.
 
+## 0.9.6 - 2026-10-25
+
+- Fixed: the arrow in the "jump to the latest" button sat off-centre in Safari and on iPhones.
+
 ## 0.9.5 - 2026-10-10
 
 - `baabaa help` prints a guide to the commands, and `baabaa help COMMAND` the details of one. `baabaa version`
